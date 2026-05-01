@@ -1,0 +1,36 @@
+{
+  "name": "taxify",
+  "version": "1.0.0",
+  "main": "server/server.js",
+  "scripts": {
+    "server": "nodemon server/server.js",
+    "client": "npm run dev --prefix client",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "start": "node server/server.js",
+    "seed:users": "node server/scripts/seedUsers.js",
+    "test": "jest --runInBand"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cores": "^0.8.5",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.4.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.6.1",
+    "morgan": "^1.10.1",
+    "zod": "^4.4.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "jest": "^30.3.0",
+    "mongodb-memory-server": "^11.1.0",
+    "supertest": "^7.2.2"
+  }
+}

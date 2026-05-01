@@ -1,0 +1,39 @@
+Taxify – Taxi Dispatch & Operations Platform (Project Brief)
+
+Overview:
+Taxify is a web-based taxi dispatch system designed to replace manual workflows with a centralized, real-time platform.
+
+Core Features:
+- Admin, Agent, Driver roles
+- Automatic driver assignment
+- Queue system for unassigned bookings
+- Trip lifecycle tracking (start/end trip)
+- Cash payment tracking
+- Commission system (10%)
+- Driver onboarding + approval
+- Complaint management
+- Admin dashboard with analytics
+
+Flow:
+1. Agent/Admin creates booking
+2. System auto-assigns available driver
+3. If none, booking goes into queue
+4. Driver accepts/rejects
+5. Driver starts trip (timer begins)
+6. Driver ends trip (fare calculated)
+7. Customer pays cash
+8. Driver confirms payment
+9. Driver returns to available pool
+
+Driver Lifecycle:
+- ACTIVE → can receive jobs
+- SUSPENDED → unpaid commission
+- DEACTIVATED → long-term unpaid
+
+Commission:
+- 10% per trip
+- Monthly tracking
+- Driver uploads receipt
+- Admin approves payment
+
+End of Document
