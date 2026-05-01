@@ -81,4 +81,17 @@ const me = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { register, getPending, approve, suspend, reactivate, me };
+const deactivate = asyncHandler(async (req, res) => {
+  const driver = await updateDriverStatus(req.params.id, {
+    status: DRIVER_STATUSES.DEACTIVATED,
+    deactivatedAt: new Date(),
+    deactivationReason: req.validated.body.reason || "",
+  });
+
+  res.json({
+    success: true,
+    data: { driver },
+  });
+});
+
+module.exports = { register, getPending, approve, suspend, reactivate, deactivate, me };

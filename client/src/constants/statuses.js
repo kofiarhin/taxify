@@ -1,0 +1,75 @@
+export const BOOKING_STATUSES = {
+  PENDING_ASSIGNMENT: "PENDING_ASSIGNMENT",
+  QUEUED: "QUEUED",
+  ASSIGNED: "ASSIGNED",
+  ACCEPTED: "ACCEPTED",
+  REJECTED: "REJECTED",
+  IN_PROGRESS: "IN_PROGRESS",
+  COMPLETED: "COMPLETED",
+  PAYMENT_PENDING: "PAYMENT_PENDING",
+  PAID: "PAID",
+  CANCELLED: "CANCELLED",
+};
+
+export const DRIVER_STATUSES = {
+  PENDING_APPROVAL: "PENDING_APPROVAL",
+  ACTIVE: "ACTIVE",
+  BUSY: "BUSY",
+  OFFLINE: "OFFLINE",
+  SUSPENDED: "SUSPENDED",
+  DEACTIVATED: "DEACTIVATED",
+};
+
+export const COMMISSION_STATUSES = {
+  DUE: "DUE",
+  SUBMITTED: "SUBMITTED",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  SETTLED: "SETTLED",
+  OVERDUE: "OVERDUE",
+};
+
+export const COMPLAINT_STATUSES = {
+  OPEN: "OPEN",
+  INVESTIGATING: "INVESTIGATING",
+  RESOLVED: "RESOLVED",
+  DISMISSED: "DISMISSED",
+};
+
+export const COMPLAINT_PRIORITIES = {
+  LOW: "LOW",
+  MEDIUM: "MEDIUM",
+  HIGH: "HIGH",
+  CRITICAL: "CRITICAL",
+};
+
+export const BOOKING_STATUS_COLORS = {
+  PENDING_ASSIGNMENT: "text-amber-300",
+  QUEUED: "text-orange-300",
+  ASSIGNED: "text-blue-300",
+  ACCEPTED: "text-cyan-300",
+  IN_PROGRESS: "text-emerald-300",
+  PAYMENT_PENDING: "text-yellow-300",
+  PAID: "text-emerald-400",
+  COMPLETED: "text-zinc-400",
+  REJECTED: "text-red-300",
+  CANCELLED: "text-zinc-500",
+};
+
+export const DRIVER_STATUS_COLORS = {
+  PENDING_APPROVAL: "text-amber-300",
+  ACTIVE: "text-emerald-300",
+  BUSY: "text-blue-300",
+  OFFLINE: "text-zinc-400",
+  SUSPENDED: "text-red-300",
+  DEACTIVATED: "text-zinc-600",
+};
+
+export const COMMISSION_STATUS_COLORS = {
+  DUE: "text-amber-300",
+  SUBMITTED: "text-blue-300",
+  APPROVED: "text-emerald-300",
+  REJECTED: "text-red-300",
+  SETTLED: "text-zinc-400",
+  OVERDUE: "text-red-400",
+};

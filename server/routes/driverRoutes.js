@@ -11,6 +11,7 @@ const {
   approve,
   suspend,
   reactivate,
+  deactivate,
   me,
 } = require("../controllers/driverController");
 
@@ -32,5 +33,6 @@ router.get("/pending", auth, requireRole(ROLES.ADMIN), getPending);
 router.post("/:id/approve", auth, requireRole(ROLES.ADMIN), validateRequest(driverActionSchema), approve);
 router.post("/:id/suspend", auth, requireRole(ROLES.ADMIN), validateRequest(driverActionSchema), suspend);
 router.post("/:id/reactivate", auth, requireRole(ROLES.ADMIN), validateRequest(driverActionSchema), reactivate);
+router.post("/:id/deactivate", auth, requireRole(ROLES.ADMIN), validateRequest(driverActionSchema), deactivate);
 
 module.exports = router;

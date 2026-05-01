@@ -83,6 +83,15 @@ const driverProfileSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    currentAssignmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AssignmentAttempt",
+      default: null,
+    },
+    lastAssignedAt: {
+      type: Date,
+      default: null,
+    },
     commissionDebt: {
       type: Number,
       default: 0,
