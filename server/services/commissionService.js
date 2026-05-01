@@ -1,12 +1,68 @@
 const CommissionStatement = require("../models/CommissionStatement");
 const DriverProfile = require("../models/DriverProfile");
-const { COMMISSION_STATUSES, COMMISSION_RATE } = require("../constants/statuses");
+const { env } = require("../config/env");
+const { COMMISSION_STATUSES } = require("../constants/statuses");
+const { ApiError } = require("../utils/apiError");
+const { syncDriverSuspension } = require("./driverStatusService");
+const { emitDomainEvent } = require("../socket");
+
+const COMMISSION_TRANSITIONS = {
+  [COMMISSION_STATUSES.DUE]: [COMMISSION_STATUSES.SUBMITTED],
+  [COMMISSION_STATUSES.SUBMITTED]: [
+    COMMISSION_STATUSES.APPROVED,
+    COMMISSION_STATUSES.REJECTED,
+    COMMISSION_STATUSES.SETTLED,
+  ],
+  [COMMISSION_STATUSES.APPROVED]: [COMMISSION_STATUSES.SETTLED],
+  [COMMISSION_STATUSES.REJECTED]: [COMMISSION_STATUSES.SUBMITTED],
+  [COMMISSION_STATUSES.SETTLED]: [],
+};
+
+function getStatementPeriod(dateValue) {
+  const date = new Date(dateValue);
+  return {
+    month: date.getUTCMonth() + 1,
+    year: date.getUTCFullYear(),
+  };
+}
+
+function getStatementDueDate(periodMonth, periodYear) {
+  const monthEnd = new Date(Date.UTC(periodYear, periodMonth, 0, 23, 59, 59, 999));
+  monthEnd.setUTCDate(monthEnd.getUTCDate() + env.COMMISSION_PAYMENT_GRACE_DAYS);
+  return monthEnd;
+}
+
+function assertTransition(currentStatus, nextStatus) {
+  const allowedTransitions = COMMISSION_TRANSITIONS[currentStatus] ?? [];
+  if (!allowedTransitions.includes(nextStatus)) {
+    throw new ApiError(
+      400,
+      `Invalid commission status transition: ${currentStatus} -> ${nextStatus}`
+    );
+  }
+}
+
+function normalizeSettlement(statement) {
+  statement.balanceDue = Math.max(0, Number((statement.commissionTotal - statement.amountPaid).toFixed(2)));
+}
+
+async function reduceDriverDebt(driverId, amount) {
+  if (amount <= 0) {
+    return;
+  }
+
+  const driver = await DriverProfile.findById(driverId);
+  if (!driver) {
+    throw new ApiError(404, "Driver profile not found");
+  }
+
+  driver.commissionDebt = Math.max(0, Number((driver.commissionDebt - amount).toFixed(2)));
+  await driver.save();
+}
 
 async function recordTripCommission(trip) {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const commission = trip.commissionAmount ?? trip.fare * COMMISSION_RATE;
+  const { month, year } = getStatementPeriod(trip.endedAt ?? trip.paymentConfirmedAt ?? new Date());
+  const commission = trip.commissionAmount ?? trip.fare * env.COMMISSION_RATE;
 
   let statement = await CommissionStatement.findOne({
     driverId: trip.driverId,
@@ -21,18 +77,20 @@ async function recordTripCommission(trip) {
       periodYear: year,
       tripIds: [trip._id],
       grossTripRevenue: trip.fare,
-      commissionRate: COMMISSION_RATE,
+      commissionRate: env.COMMISSION_RATE,
       commissionTotal: commission,
       balanceDue: commission,
+      dueDate: getStatementDueDate(month, year),
       status: COMMISSION_STATUSES.DUE,
     });
   } else {
     statement.tripIds.push(trip._id);
     statement.grossTripRevenue += trip.fare;
     statement.commissionTotal += commission;
-    statement.balanceDue = statement.commissionTotal - statement.amountPaid;
+    normalizeSettlement(statement);
     if (statement.status === COMMISSION_STATUSES.SETTLED) {
       statement.status = COMMISSION_STATUSES.DUE;
+      statement.settledAt = null;
     }
     await statement.save();
   }
@@ -40,6 +98,9 @@ async function recordTripCommission(trip) {
   await DriverProfile.findByIdAndUpdate(trip.driverId, {
     $inc: { commissionDebt: commission },
   });
+
+  await syncDriverSuspension(trip.driverId);
+  emitDomainEvent("commission.updated", { statementId: statement._id.toString(), driverId: trip.driverId.toString() });
 
   return statement;
 }
@@ -50,53 +111,119 @@ async function submitReceipt(statementId, driverProfileId, fileUrl) {
     driverId: driverProfileId,
   });
 
-  if (!statement) throw new Error("Commission statement not found");
-  if (statement.status === COMMISSION_STATUSES.SETTLED) {
-    throw new Error("Statement is already settled");
-  }
+  if (!statement) throw new ApiError(404, "Commission statement not found");
+  assertTransition(statement.status, COMMISSION_STATUSES.SUBMITTED);
 
   statement.receiptFileUrl = fileUrl;
   statement.submittedAt = new Date();
   statement.status = COMMISSION_STATUSES.SUBMITTED;
+  statement.rejectionReason = "";
   await statement.save();
+  emitDomainEvent("commission.updated", {
+    statementId: statement._id.toString(),
+    driverId: statement.driverId.toString(),
+  });
 
   return statement;
 }
 
-async function approveStatement(statementId, reviewerUserId, notes = "") {
+async function approveStatement(statementId, reviewerUserId, notes = "", settleImmediately = false) {
   const statement = await CommissionStatement.findById(statementId);
-  if (!statement) throw new Error("Commission statement not found");
+  if (!statement) throw new ApiError(404, "Commission statement not found");
+
+  assertTransition(
+    statement.status,
+    settleImmediately ? COMMISSION_STATUSES.SETTLED : COMMISSION_STATUSES.APPROVED
+  );
 
   const previousBalance = statement.balanceDue;
+  statement.status = settleImmediately
+    ? COMMISSION_STATUSES.SETTLED
+    : COMMISSION_STATUSES.APPROVED;
+  statement.reviewedAt = new Date();
+  statement.reviewedBy = reviewerUserId;
+  statement.reviewNotes = notes;
+  statement.approvedAt = new Date();
+  statement.rejectionReason = "";
 
+  if (settleImmediately) {
+    statement.amountPaid = statement.commissionTotal;
+    statement.balanceDue = 0;
+    statement.settledAt = new Date();
+  }
+
+  await statement.save();
+
+  if (settleImmediately && previousBalance > 0) {
+    await reduceDriverDebt(statement.driverId, previousBalance);
+  }
+
+  await syncDriverSuspension(statement.driverId);
+  emitDomainEvent("commission.updated", {
+    statementId: statement._id.toString(),
+    driverId: statement.driverId.toString(),
+  });
+
+  return statement;
+}
+
+async function settleStatement(statementId, reviewerUserId, notes = "") {
+  const statement = await CommissionStatement.findById(statementId);
+  if (!statement) throw new ApiError(404, "Commission statement not found");
+
+  assertTransition(statement.status, COMMISSION_STATUSES.SETTLED);
+
+  const previousBalance = statement.balanceDue;
   statement.status = COMMISSION_STATUSES.SETTLED;
   statement.amountPaid = statement.commissionTotal;
   statement.balanceDue = 0;
   statement.reviewedAt = new Date();
   statement.reviewedBy = reviewerUserId;
   statement.reviewNotes = notes;
+  statement.settledAt = new Date();
   await statement.save();
 
-  await DriverProfile.findByIdAndUpdate(statement.driverId, {
-    $inc: { commissionDebt: -previousBalance },
+  if (previousBalance > 0) {
+    await reduceDriverDebt(statement.driverId, previousBalance);
+  }
+
+  await syncDriverSuspension(statement.driverId);
+  emitDomainEvent("commission.updated", {
+    statementId: statement._id.toString(),
+    driverId: statement.driverId.toString(),
   });
 
   return statement;
 }
 
-async function rejectStatement(statementId, reviewerUserId, notes = "") {
+async function rejectStatement(statementId, reviewerUserId, reason = "") {
   const statement = await CommissionStatement.findById(statementId);
-  if (!statement) throw new Error("Commission statement not found");
+  if (!statement) throw new ApiError(404, "Commission statement not found");
 
-  statement.status = COMMISSION_STATUSES.DUE;
-  statement.receiptFileUrl = null;
-  statement.submittedAt = null;
+  assertTransition(statement.status, COMMISSION_STATUSES.REJECTED);
+
+  statement.status = COMMISSION_STATUSES.REJECTED;
   statement.reviewedAt = new Date();
   statement.reviewedBy = reviewerUserId;
-  statement.reviewNotes = notes;
+  statement.reviewNotes = reason;
+  statement.rejectionReason = reason;
   await statement.save();
+
+  await syncDriverSuspension(statement.driverId);
+  emitDomainEvent("commission.updated", {
+    statementId: statement._id.toString(),
+    driverId: statement.driverId.toString(),
+  });
 
   return statement;
 }
 
-module.exports = { recordTripCommission, submitReceipt, approveStatement, rejectStatement };
+module.exports = {
+  COMMISSION_TRANSITIONS,
+  getStatementDueDate,
+  recordTripCommission,
+  submitReceipt,
+  approveStatement,
+  settleStatement,
+  rejectStatement,
+};

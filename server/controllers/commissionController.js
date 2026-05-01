@@ -4,8 +4,12 @@ const AuditLog = require("../models/AuditLog");
 const { asyncHandler } = require("../utils/asyncHandler");
 const { getPagination } = require("../utils/pagination");
 const { ApiError } = require("../utils/apiError");
-const { submitReceipt, approveStatement, rejectStatement } = require("../services/commissionService");
-const path = require("path");
+const {
+  submitReceipt,
+  approveStatement,
+  settleStatement,
+  rejectStatement,
+} = require("../services/commissionService");
 
 const listCommissions = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPagination(req.query);
@@ -67,12 +71,27 @@ const approveReceipt = asyncHandler(async (req, res) => {
   const statement = await approveStatement(
     req.params.id,
     req.user._id,
-    req.body.notes || ""
+    req.body.notes || "",
+    req.body.settleImmediately === true
   );
 
   await AuditLog.create({
     actorUserId: req.user._id,
     action: "COMMISSION_APPROVED",
+    entityType: "CommissionStatement",
+    entityId: statement._id,
+    metadata: { driverId: statement.driverId },
+  });
+
+  res.json({ success: true, data: { statement } });
+});
+
+const settleReceipt = asyncHandler(async (req, res) => {
+  const statement = await settleStatement(req.params.id, req.user._id, req.body.notes || "");
+
+  await AuditLog.create({
+    actorUserId: req.user._id,
+    action: "COMMISSION_SETTLED",
     entityType: "CommissionStatement",
     entityId: statement._id,
     metadata: { driverId: statement.driverId },
@@ -99,4 +118,12 @@ const rejectReceipt = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { statement } });
 });
 
-module.exports = { listCommissions, getMyCommissions, getCommission, uploadReceipt, approveReceipt, rejectReceipt };
+module.exports = {
+  listCommissions,
+  getMyCommissions,
+  getCommission,
+  uploadReceipt,
+  approveReceipt,
+  settleReceipt,
+  rejectReceipt,
+};

@@ -1,25 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../../components/shared/AppShell";
-import { getQueue, retryAssignment } from "../../services/bookingService";
+import { useRetryAssignmentMutation } from "../../hooks/mutations/useBookingMutations";
+import { useQueueQuery } from "../../hooks/queries/useBookingQueries";
 
 function minutesAgo(dateStr) {
-  if (!dateStr) return "—";
+  if (!dateStr) return "--";
   return Math.round((Date.now() - new Date(dateStr).getTime()) / 60000);
 }
 
 export function AdminQueuePage() {
-  const qc = useQueryClient();
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["queue"],
-    queryFn: getQueue,
-    refetchInterval: 10000,
-  });
-
-  const retryMut = useMutation({
-    mutationFn: retryAssignment,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }),
-  });
-
+  const { data, isLoading, isError } = useQueueQuery();
+  const retryMut = useRetryAssignmentMutation();
   const bookings = data ?? [];
 
   return (
@@ -33,11 +23,12 @@ export function AdminQueuePage() {
 
       {isLoading && (
         <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-3xl bg-white/6" />
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="h-20 animate-pulse rounded-3xl bg-white/6" />
           ))}
         </div>
       )}
+
       {isError && (
         <div className="rounded-4xl border border-amber-300/20 bg-amber-300/10 p-5 text-amber-100">
           Failed to load queue.
@@ -46,22 +37,24 @@ export function AdminQueuePage() {
 
       {!isLoading && !isError && bookings.length === 0 && (
         <div className="rounded-4xl border border-white/8 bg-white/3 p-6 text-zinc-400">
-          Queue is clear — all bookings are assigned or resolved.
+          Queue is clear - all bookings are assigned or resolved.
         </div>
       )}
 
       {!isLoading && !isError && bookings.length > 0 && (
         <div className="space-y-3">
-          {bookings.map((b) => (
-            <div key={b._id} className="rounded-3xl border border-amber-300/10 bg-amber-300/5 p-5">
+          {bookings.map((booking) => (
+            <div key={booking._id} className="rounded-3xl border border-amber-300/10 bg-amber-300/5 p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm text-zinc-400">{b.bookingReference}</p>
-                  <p className="mt-1 text-base text-white">{b.customerName}</p>
-                  <p className="mt-1 text-sm text-zinc-500">{b.pickupAddress} → {b.dropoffAddress}</p>
+                  <p className="text-sm text-zinc-400">{booking.bookingReference}</p>
+                  <p className="mt-1 text-base text-white">{booking.customerName}</p>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    {booking.pickupAddress} {"->"} {booking.dropoffAddress}
+                  </p>
                 </div>
                 <span className="rounded-full border border-amber-300/20 px-3 py-1 text-xs uppercase tracking-widest text-amber-300">
-                  Queued {minutesAgo(b.queueEnteredAt)} min ago
+                  Queued {minutesAgo(booking.queueEnteredAt)} min ago
                 </span>
               </div>
 
@@ -69,7 +62,7 @@ export function AdminQueuePage() {
                 <button
                   type="button"
                   disabled={retryMut.isPending}
-                  onClick={() => retryMut.mutate(b._id)}
+                  onClick={() => retryMut.mutate(booking._id)}
                   className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 py-2 text-sm text-emerald-100 transition hover:-translate-y-px disabled:opacity-50"
                 >
                   {retryMut.isPending ? "Retrying..." : "Retry assignment"}

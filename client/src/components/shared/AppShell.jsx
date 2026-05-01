@@ -42,6 +42,7 @@ const roleNavigation = {
 export function AppShell({ eyebrow, title, summary, children }) {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
+  const socketState = useSelector((state) => state.ui.socketState);
   const items = roleNavigation[user?.role] || [];
 
   function handleLogout() {
@@ -82,6 +83,9 @@ export function AppShell({ eyebrow, title, summary, children }) {
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Signed in</p>
             <p className="mt-2 text-base text-white">{user?.fullName}</p>
             <p className="mt-1 text-sm text-zinc-400">{user?.email}</p>
+            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-zinc-500">
+              Realtime: {socketState}
+            </p>
             <button
               type="button"
               onClick={handleLogout}

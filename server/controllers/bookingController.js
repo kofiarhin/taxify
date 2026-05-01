@@ -8,6 +8,7 @@ const {
   generateBookingReference,
 } = require("../services/assignmentService");
 const { BOOKING_STATUSES, ASSIGNMENT_MODES } = require("../constants/statuses");
+const { emitDomainEvent } = require("../socket");
 
 const createBooking = asyncHandler(async (req, res) => {
   const body = req.validated.body;
@@ -18,6 +19,7 @@ const createBooking = asyncHandler(async (req, res) => {
     status: BOOKING_STATUSES.PENDING_ASSIGNMENT,
   });
 
+  emitDomainEvent("booking.created", { bookingId: booking._id.toString() });
   await dispatchBooking(booking._id, ASSIGNMENT_MODES.AUTO);
   const refreshed = await Booking.findById(booking._id);
 

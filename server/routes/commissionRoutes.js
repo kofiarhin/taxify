@@ -9,10 +9,22 @@ const {
   getCommission,
   uploadReceipt,
   approveReceipt,
+  settleReceipt,
   rejectReceipt,
 } = require("../controllers/commissionController");
+const { validateRequest } = require("../middleware/validateRequest");
+const { z } = require("zod");
 
 const router = express.Router();
+
+const reviewSchema = z.object({
+  body: z.object({
+    notes: z.string().optional(),
+    settleImmediately: z.boolean().optional(),
+  }),
+  params: z.object({ id: z.string().min(1) }),
+  query: z.object({}),
+});
 
 router.use(auth);
 
@@ -21,7 +33,8 @@ router.get("/mine", requireRole(ROLES.DRIVER), getMyCommissions);
 router.get("/:id", requireRole(ROLES.ADMIN, ROLES.DRIVER), getCommission);
 
 router.post("/:id/submit-receipt", requireRole(ROLES.DRIVER), handleReceiptUpload, uploadReceipt);
-router.post("/:id/approve", requireRole(ROLES.ADMIN), approveReceipt);
-router.post("/:id/reject", requireRole(ROLES.ADMIN), rejectReceipt);
+router.post("/:id/approve", requireRole(ROLES.ADMIN), validateRequest(reviewSchema), approveReceipt);
+router.post("/:id/settle", requireRole(ROLES.ADMIN), validateRequest(reviewSchema), settleReceipt);
+router.post("/:id/reject", requireRole(ROLES.ADMIN), validateRequest(reviewSchema), rejectReceipt);
 
 module.exports = router;

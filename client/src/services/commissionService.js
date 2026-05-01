@@ -29,6 +29,11 @@ export async function approveCommission(id, notes = "") {
   return response.data.data.statement;
 }
 
+export async function settleCommission(id, notes = "") {
+  const response = await api.post(`/commissions/${id}/settle`, { notes });
+  return response.data.data.statement;
+}
+
 export async function rejectCommission(id, notes = "") {
   const response = await api.post(`/commissions/${id}/reject`, { notes });
   return response.data.data.statement;

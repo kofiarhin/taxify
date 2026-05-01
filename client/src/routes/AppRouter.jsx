@@ -15,6 +15,7 @@ import { AgentBookingCreatePage } from "../pages/agent/AgentBookingCreatePage";
 import { AgentQueuePage } from "../pages/agent/AgentQueuePage";
 import { AgentComplaintsPage } from "../pages/agent/AgentComplaintsPage";
 import { DriverWorkspacePage } from "../pages/driver/DriverWorkspacePage";
+import { DriverTripPage } from "../pages/driver/DriverTripPage";
 import { DriverTripsPage } from "../pages/driver/DriverTripsPage";
 import { DriverCommissionsPage } from "../pages/driver/DriverCommissionsPage";
 import { ProtectedRoute } from "./ProtectedRoute";
@@ -57,6 +58,7 @@ export function AppRouter() {
         </Route>
         <Route element={<RoleRoute allowedRoles={["DRIVER"]} />}>
           <Route path="/driver" element={<DriverWorkspacePage />} />
+          <Route path="/driver/trip" element={<DriverTripPage />} />
           <Route path="/driver/trips" element={<DriverTripsPage />} />
           <Route path="/driver/commissions" element={<DriverCommissionsPage />} />
         </Route>

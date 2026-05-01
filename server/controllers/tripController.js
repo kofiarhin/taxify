@@ -8,6 +8,7 @@ const { ApiError } = require("../utils/apiError");
 const { setDriverBusy, returnDriverToAvailable } = require("../services/driverStatusService");
 const { recordTripCommission } = require("../services/commissionService");
 const { BOOKING_STATUSES, DRIVER_STATUSES } = require("../constants/statuses");
+const { emitDomainEvent } = require("../socket");
 
 const FARE_PER_MINUTE_GHS = 1;
 
@@ -39,6 +40,7 @@ const startTrip = asyncHandler(async (req, res) => {
   await booking.save();
 
   await setDriverBusy(driverProfile._id);
+  emitDomainEvent("trip.started", { bookingId: booking._id.toString(), tripId: trip._id.toString() });
 
   await AuditLog.create({
     actorUserId: req.user._id,
@@ -86,6 +88,7 @@ const endTrip = asyncHandler(async (req, res) => {
     metadata: { fare: trip.fare, durationMinutes: trip.durationMinutes },
   });
 
+  emitDomainEvent("trip.ended", { bookingId: booking._id.toString(), tripId: trip._id.toString() });
   res.json({ success: true, data: { trip, booking } });
 });
 
@@ -114,6 +117,11 @@ const confirmPayment = asyncHandler(async (req, res) => {
 
   await recordTripCommission(trip);
   await returnDriverToAvailable(driverProfile._id);
+  emitDomainEvent("payment.confirmed", {
+    bookingId: booking._id.toString(),
+    tripId: trip._id.toString(),
+    driverId: driverProfile._id.toString(),
+  });
 
   await AuditLog.create({
     actorUserId: req.user._id,

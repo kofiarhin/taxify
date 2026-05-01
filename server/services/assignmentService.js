@@ -1,14 +1,16 @@
 const Booking = require("../models/Booking");
 const DriverProfile = require("../models/DriverProfile");
 const AssignmentAttempt = require("../models/AssignmentAttempt");
+const { env } = require("../config/env");
 const {
   BOOKING_STATUSES,
   ASSIGNMENT_STATUSES,
   DRIVER_STATUSES,
-  ASSIGNMENT_TIMEOUT_MS,
   ASSIGNMENT_MODES,
 } = require("../constants/statuses");
 const { ApiError } = require("../utils/apiError");
+const { releaseDriverFromAssignment } = require("./driverStatusService");
+const { emitDomainEvent } = require("../socket");
 
 function generateBookingReference() {
   const now = new Date();
@@ -17,7 +19,8 @@ function generateBookingReference() {
   return `TXF-${date}-${rand}`;
 }
 
-async function dispatchBooking(bookingId, mode = ASSIGNMENT_MODES.AUTO) {
+async function dispatchBooking(bookingId, mode = ASSIGNMENT_MODES.AUTO, options = {}) {
+  const excludeDriverIds = (options.excludeDriverIds ?? []).map((value) => value.toString());
   const booking = await Booking.findById(bookingId);
   if (!booking) throw new ApiError(404, "Booking not found");
 
@@ -31,12 +34,15 @@ async function dispatchBooking(bookingId, mode = ASSIGNMENT_MODES.AUTO) {
   const eligibleDrivers = await DriverProfile.find({
     status: DRIVER_STATUSES.ACTIVE,
     currentAssignmentId: null,
+    ...(excludeDriverIds.length > 0 ? { _id: { $nin: excludeDriverIds } } : {}),
   }).sort({ lastAssignedAt: 1, createdAt: 1 });
 
   if (eligibleDrivers.length === 0) {
     booking.status = BOOKING_STATUSES.QUEUED;
     if (!booking.queueEnteredAt) booking.queueEnteredAt = new Date();
+    booking.assignedDriverId = null;
     await booking.save();
+    emitDomainEvent("booking.queued", { bookingId: booking._id.toString() });
     return { queued: true, booking };
   }
 
@@ -50,16 +56,22 @@ async function dispatchBooking(bookingId, mode = ASSIGNMENT_MODES.AUTO) {
     attemptNumber,
     status: ASSIGNMENT_STATUSES.PENDING,
     assignedAt: new Date(),
-    expiresAt: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
+    expiresAt: new Date(Date.now() + env.ASSIGNMENT_TIMEOUT_MS),
   });
 
   booking.status = BOOKING_STATUSES.ASSIGNED;
   booking.assignedDriverId = driver._id;
   booking.assignmentMode = mode;
+  booking.queueEnteredAt = null;
   await booking.save();
 
   driver.currentAssignmentId = attempt._id;
   await driver.save();
+  emitDomainEvent("booking.assigned", {
+    bookingId: booking._id.toString(),
+    driverId: driver._id.toString(),
+    assignmentId: attempt._id.toString(),
+  });
 
   return { assigned: true, booking, attempt, driver };
 }
@@ -74,9 +86,7 @@ async function acceptAssignment(attemptId, driverProfileId) {
     throw new ApiError(400, "Assignment is no longer pending");
   }
   if (attempt.expiresAt < new Date()) {
-    attempt.status = ASSIGNMENT_STATUSES.TIMEOUT;
-    attempt.respondedAt = new Date();
-    await attempt.save();
+    await expireAssignmentAttempt(attempt, { reassign: true, excludeDriverIds: [driverProfileId] });
     throw new ApiError(400, "Assignment has expired");
   }
 
@@ -88,6 +98,11 @@ async function acceptAssignment(attemptId, driverProfileId) {
   booking.status = BOOKING_STATUSES.ACCEPTED;
   booking.acceptedAt = new Date();
   await booking.save();
+  emitDomainEvent("driver.accepted", {
+    bookingId: booking._id.toString(),
+    driverId: driverProfileId.toString(),
+    assignmentId: attempt._id.toString(),
+  });
 
   return { attempt, booking };
 }
@@ -107,46 +122,20 @@ async function rejectAssignment(attemptId, driverProfileId, reason = "") {
   attempt.reason = reason;
   await attempt.save();
 
-  const { clearDriverAssignment } = require("./driverStatusService");
-  await clearDriverAssignment(driverProfileId);
-
   const booking = await Booking.findById(attempt.bookingId);
-
-  const eligibleDrivers = await DriverProfile.find({
-    status: DRIVER_STATUSES.ACTIVE,
-    currentAssignmentId: null,
-    _id: { $ne: driverProfileId },
-  }).sort({ lastAssignedAt: 1, createdAt: 1 });
-
-  if (eligibleDrivers.length === 0) {
-    booking.status = BOOKING_STATUSES.QUEUED;
-    if (!booking.queueEnteredAt) booking.queueEnteredAt = new Date();
-    booking.assignedDriverId = null;
-    await booking.save();
-    return { queued: true, booking, attempt };
-  }
-
-  const nextDriver = eligibleDrivers[0];
-  const attemptNumber =
-    (await AssignmentAttempt.countDocuments({ bookingId: booking._id })) + 1;
-
-  const nextAttempt = await AssignmentAttempt.create({
-    bookingId: booking._id,
-    driverId: nextDriver._id,
-    attemptNumber,
-    status: ASSIGNMENT_STATUSES.PENDING,
-    assignedAt: new Date(),
-    expiresAt: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
+  await releaseDriverFromAssignment(driverProfileId, attempt._id);
+  emitDomainEvent("driver.rejected", {
+    bookingId: booking._id.toString(),
+    driverId: driverProfileId.toString(),
+    assignmentId: attempt._id.toString(),
   });
 
-  booking.status = BOOKING_STATUSES.ASSIGNED;
-  booking.assignedDriverId = nextDriver._id;
-  await booking.save();
+  const dispatchResult = await requeueOrRedispatchBooking(booking, {
+    excludeDriverIds: [driverProfileId],
+    mode: ASSIGNMENT_MODES.QUEUE_RETRY,
+  });
 
-  nextDriver.currentAssignmentId = nextAttempt._id;
-  await nextDriver.save();
-
-  return { reassigned: true, booking, attempt: nextAttempt };
+  return { ...dispatchResult, attempt };
 }
 
 async function getCurrentAssignmentForDriver(driverProfileId) {
@@ -173,10 +162,88 @@ async function getCurrentAssignmentForDriver(driverProfileId) {
   return { booking, attempt };
 }
 
+async function requeueOrRedispatchBooking(booking, options = {}) {
+  booking.status = BOOKING_STATUSES.PENDING_ASSIGNMENT;
+  booking.assignedDriverId = null;
+  booking.acceptedAt = null;
+  await booking.save();
+  return dispatchBooking(booking._id, options.mode ?? ASSIGNMENT_MODES.QUEUE_RETRY, {
+    excludeDriverIds: options.excludeDriverIds ?? [],
+  });
+}
+
+async function expireAssignmentAttempt(attemptOrId, options = {}) {
+  const attempt =
+    typeof attemptOrId === "string" || attemptOrId?.constructor?.name === "ObjectId"
+      ? await AssignmentAttempt.findById(attemptOrId)
+      : attemptOrId;
+
+  if (!attempt) {
+    return null;
+  }
+
+  if (attempt.status !== ASSIGNMENT_STATUSES.PENDING) {
+    return { attempt };
+  }
+
+  attempt.status = ASSIGNMENT_STATUSES.TIMEOUT;
+  attempt.respondedAt = options.now ?? new Date();
+  attempt.reason = attempt.reason || "Assignment expired";
+  await attempt.save();
+
+  await releaseDriverFromAssignment(attempt.driverId, attempt._id);
+
+  const booking = await Booking.findById(attempt.bookingId);
+  if (!booking) {
+    return { attempt, booking: null };
+  }
+
+  emitDomainEvent("booking.queued", {
+    bookingId: booking._id.toString(),
+    assignmentId: attempt._id.toString(),
+    expired: true,
+  });
+
+  if (
+    options.reassign !== false &&
+    booking.status === BOOKING_STATUSES.ASSIGNED &&
+    booking.assignedDriverId?.toString() === attempt.driverId.toString()
+  ) {
+    const result = await requeueOrRedispatchBooking(booking, {
+      excludeDriverIds: options.excludeDriverIds ?? [attempt.driverId],
+      mode: ASSIGNMENT_MODES.QUEUE_RETRY,
+    });
+    return { attempt, booking: result.booking, dispatchResult: result };
+  }
+
+  return { attempt, booking };
+}
+
+async function expirePendingAssignments(now = new Date()) {
+  const expiredAttempts = await AssignmentAttempt.find({
+    status: ASSIGNMENT_STATUSES.PENDING,
+    expiresAt: { $lte: now },
+  });
+
+  const results = [];
+  for (const attempt of expiredAttempts) {
+    results.push(
+      await expireAssignmentAttempt(attempt, {
+        now,
+        reassign: true,
+        excludeDriverIds: [attempt.driverId],
+      })
+    );
+  }
+  return results;
+}
+
 module.exports = {
   generateBookingReference,
   dispatchBooking,
   acceptAssignment,
   rejectAssignment,
   getCurrentAssignmentForDriver,
+  expireAssignmentAttempt,
+  expirePendingAssignments,
 };

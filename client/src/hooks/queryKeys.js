@@ -1,0 +1,18 @@
+export const queryKeys = {
+  bookingsRoot: ["bookings"],
+  bookings: (statusFilter = "") => ["bookings", statusFilter],
+  agentBookings: ["agent-bookings"],
+  queue: ["queue"],
+  dashboardSummary: ["dashboard-summary"],
+  driversPending: ["drivers-pending"],
+  driversAll: ["drivers-all"],
+  complaintsRoot: ["complaints"],
+  complaints: (statusFilter = "") => ["complaints", statusFilter],
+  agentComplaints: ["agent-complaints"],
+  myAssignment: ["my-assignment"],
+  driverTrips: ["driver-trips"],
+  tripsAll: ["trips-all"],
+  driverCommissions: ["driver-commissions"],
+  commissionsAll: ["commissions-all"],
+  users: ["users"],
+};

@@ -1,45 +1,38 @@
-import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../../components/shared/AppShell";
-import { api } from "../../lib/api";
-
-async function getUsers() {
-  const response = await api.get("/users");
-  return response.data.data.users;
-}
+import { useUsersQuery } from "../../hooks/queries/useUserQueries";
 
 export function AdminUsersPage() {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["users"],
-    queryFn: getUsers,
-  });
+  const { data, isLoading, isError } = useUsersQuery();
 
   return (
     <AppShell
       eyebrow="Admin workspace"
       title="Shape the team."
-      summary="This page is wired to the admin user list endpoint. It provides loading, error, and empty states now so the later user-management forms can drop into an already stable surface."
+      summary="This page is wired to the admin user list endpoint. It provides loading, error, and empty states now so later user-management forms can land on a stable surface."
     >
-      {isLoading ? (
+      {isLoading && (
         <div className="grid gap-4">
           <div className="h-16 animate-pulse rounded-[1.6rem] bg-white/6" />
           <div className="h-16 animate-pulse rounded-[1.6rem] bg-white/6" />
           <div className="h-16 animate-pulse rounded-[1.6rem] bg-white/6" />
         </div>
-      ) : null}
+      )}
 
-      {isError ? (
+      {isError && (
         <div className="rounded-[2rem] border border-amber-300/20 bg-amber-300/10 p-6 text-amber-100">
           Unable to load users. Confirm the seeded admin account and API environment are available.
         </div>
-      ) : null}
+      )}
 
-      {!isLoading && !isError && (!data || data.length === 0) ? (
+      {!isLoading && !isError && (!data || data.length === 0) && (
         <div className="rounded-[2rem] border border-white/8 bg-white/[0.03] p-6">
-          <p className="text-sm text-zinc-400">No staff users found yet. Create the first dispatch desk account from the API.</p>
+          <p className="text-sm text-zinc-400">
+            No staff users found yet. Create the first dispatch desk account from the API.
+          </p>
         </div>
-      ) : null}
+      )}
 
-      {!isLoading && !isError && data?.length ? (
+      {!isLoading && !isError && data?.length > 0 && (
         <div className="overflow-hidden rounded-[2rem] border border-white/8 bg-white/[0.03]">
           {data.map((user) => (
             <div
@@ -55,7 +48,7 @@ export function AdminUsersPage() {
             </div>
           ))}
         </div>
-      ) : null}
+      )}
     </AppShell>
   );
 }

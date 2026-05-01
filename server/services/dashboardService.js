@@ -62,7 +62,14 @@ async function getSummary() {
         $match: {
           periodMonth: currentMonth,
           periodYear: currentYear,
-          status: { $in: [COMMISSION_STATUSES.DUE, COMMISSION_STATUSES.OVERDUE] },
+          status: {
+            $in: [
+              COMMISSION_STATUSES.DUE,
+              COMMISSION_STATUSES.SUBMITTED,
+              COMMISSION_STATUSES.APPROVED,
+              COMMISSION_STATUSES.REJECTED,
+            ],
+          },
         },
       },
       { $group: { _id: null, total: { $sum: "$balanceDue" } } },

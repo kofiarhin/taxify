@@ -1,7 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppShell } from "../../components/shared/AppShell";
-import { getComplaints, resolveComplaint, updateComplaint } from "../../services/complaintService";
+import {
+  useResolveComplaintMutation,
+  useUpdateComplaintMutation,
+} from "../../hooks/mutations/useComplaintMutations";
+import { useComplaintsQuery } from "../../hooks/queries/useComplaintQueries";
 import { COMPLAINT_STATUSES } from "../../constants/statuses";
 
 const STATUS_COLORS = {
@@ -21,50 +24,38 @@ const PRIORITY_COLORS = {
 export function AdminComplaintsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [resolutionMap, setResolutionMap] = useState({});
-  const qc = useQueryClient();
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["complaints", statusFilter],
-    queryFn: () => getComplaints(statusFilter ? { status: statusFilter } : {}),
-  });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, payload }) => updateComplaint(id, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["complaints"] }),
-  });
-  const resolveMut = useMutation({
-    mutationFn: ({ id, notes }) => resolveComplaint(id, notes),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["complaints"] }),
-  });
-
+  const { data, isLoading, isError } = useComplaintsQuery(statusFilter);
+  const updateMut = useUpdateComplaintMutation();
+  const resolveMut = useResolveComplaintMutation();
   const complaints = data?.complaints ?? [];
 
   return (
     <AppShell eyebrow="Admin workspace" title="Complaints.">
       <div className="mb-6 flex flex-wrap gap-2">
-        {["", ...Object.values(COMPLAINT_STATUSES)].map((s) => (
+        {["", ...Object.values(COMPLAINT_STATUSES)].map((status) => (
           <button
-            key={s || "all"}
+            key={status || "all"}
             type="button"
-            onClick={() => setStatusFilter(s)}
+            onClick={() => setStatusFilter(status)}
             className={`rounded-full border px-3 py-1.5 text-xs uppercase tracking-wide transition ${
-              statusFilter === s
+              statusFilter === status
                 ? "border-emerald-300/30 bg-emerald-300/10 text-white"
                 : "border-white/10 text-zinc-500 hover:text-zinc-200"
             }`}
           >
-            {s || "All"}
+            {status || "All"}
           </button>
         ))}
       </div>
 
       {isLoading && (
         <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-3xl bg-white/6" />
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="h-24 animate-pulse rounded-3xl bg-white/6" />
           ))}
         </div>
       )}
+
       {isError && (
         <div className="rounded-4xl border border-amber-300/20 bg-amber-300/10 p-5 text-amber-100">
           Failed to load complaints.
@@ -79,40 +70,42 @@ export function AdminComplaintsPage() {
 
       {!isLoading && !isError && complaints.length > 0 && (
         <div className="space-y-4">
-          {complaints.map((c) => (
-            <div key={c._id} className="rounded-3xl border border-white/8 bg-white/3 p-5">
+          {complaints.map((complaint) => (
+            <div key={complaint._id} className="rounded-3xl border border-white/8 bg-white/3 p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs font-medium uppercase tracking-widest ${PRIORITY_COLORS[c.priority]}`}>
-                      {c.priority}
+                    <span className={`text-xs font-medium uppercase tracking-widest ${PRIORITY_COLORS[complaint.priority]}`}>
+                      {complaint.priority}
                     </span>
-                    <span className="text-zinc-600">·</span>
-                    <span className="text-sm text-zinc-400">{c.category}</span>
+                    <span className="text-zinc-600">|</span>
+                    <span className="text-sm text-zinc-400">{complaint.category}</span>
                   </div>
-                  <p className="mt-2 text-base text-white">{c.description}</p>
-                  {c.customerName && (
-                    <p className="mt-1 text-sm text-zinc-500">{c.customerName} {c.customerPhone && `· ${c.customerPhone}`}</p>
+                  <p className="mt-2 text-base text-white">{complaint.description}</p>
+                  {complaint.customerName && (
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {complaint.customerName} {complaint.customerPhone && `| ${complaint.customerPhone}`}
+                    </p>
                   )}
                   <p className="mt-1 text-xs text-zinc-600">
-                    Logged by {c.reportedByUserId?.fullName} · {new Date(c.createdAt).toLocaleString()}
+                    Logged by {complaint.reportedByUserId?.fullName} | {new Date(complaint.createdAt).toLocaleString()}
                   </p>
                 </div>
-                <span className={`rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-widest ${STATUS_COLORS[c.status]}`}>
-                  {c.status}
+                <span className={`rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-widest ${STATUS_COLORS[complaint.status]}`}>
+                  {complaint.status}
                 </span>
               </div>
 
-              {c.resolutionNotes && (
-                <p className="mt-3 text-sm text-zinc-500">Resolution: {c.resolutionNotes}</p>
+              {complaint.resolutionNotes && (
+                <p className="mt-3 text-sm text-zinc-500">Resolution: {complaint.resolutionNotes}</p>
               )}
 
-              {c.status !== "RESOLVED" && c.status !== "DISMISSED" && (
+              {complaint.status !== "RESOLVED" && complaint.status !== "DISMISSED" && (
                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                  {c.status === "OPEN" && (
+                  {complaint.status === "OPEN" && (
                     <button
                       type="button"
-                      onClick={() => updateMut.mutate({ id: c._id, payload: { status: "INVESTIGATING" } })}
+                      onClick={() => updateMut.mutate({ id: complaint._id, payload: { status: "INVESTIGATING" } })}
                       className="rounded-full border border-blue-300/20 bg-blue-300/10 px-4 py-2 text-sm text-blue-200 transition hover:-translate-y-px"
                     >
                       Investigate
@@ -120,21 +113,23 @@ export function AdminComplaintsPage() {
                   )}
                   <input
                     placeholder="Resolution notes"
-                    value={resolutionMap[c._id] ?? ""}
-                    onChange={(e) => setResolutionMap((p) => ({ ...p, [c._id]: e.target.value }))}
+                    value={resolutionMap[complaint._id] ?? ""}
+                    onChange={(event) =>
+                      setResolutionMap((previous) => ({ ...previous, [complaint._id]: event.target.value }))
+                    }
                     className="rounded-2xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 outline-none"
                   />
                   <button
                     type="button"
-                    disabled={resolveMut.isPending || !(resolutionMap[c._id]?.length >= 5)}
-                    onClick={() => resolveMut.mutate({ id: c._id, notes: resolutionMap[c._id] })}
+                    disabled={resolveMut.isPending || !(resolutionMap[complaint._id]?.length >= 5)}
+                    onClick={() => resolveMut.mutate({ id: complaint._id, notes: resolutionMap[complaint._id] })}
                     className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 py-2 text-sm text-emerald-100 transition hover:-translate-y-px disabled:opacity-40"
                   >
                     Resolve
                   </button>
                   <button
                     type="button"
-                    onClick={() => updateMut.mutate({ id: c._id, payload: { status: "DISMISSED" } })}
+                    onClick={() => updateMut.mutate({ id: complaint._id, payload: { status: "DISMISSED" } })}
                     className="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-400 transition hover:-translate-y-px"
                   >
                     Dismiss

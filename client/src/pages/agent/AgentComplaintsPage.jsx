@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { AppShell } from "../../components/shared/AppShell";
-import { createComplaint, getComplaints } from "../../services/complaintService";
+import { useCreateComplaintMutation } from "../../hooks/mutations/useComplaintMutations";
+import { useAgentComplaintsQuery } from "../../hooks/queries/useComplaintQueries";
 import { COMPLAINT_PRIORITIES } from "../../constants/statuses";
 
 const STATUS_COLORS = {
@@ -14,28 +14,20 @@ const STATUS_COLORS = {
 
 export function AgentComplaintsPage() {
   const [showForm, setShowForm] = useState(false);
-  const qc = useQueryClient();
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["agent-complaints"],
-    queryFn: () => getComplaints(),
-  });
-
-  const createMut = useMutation({
-    mutationFn: createComplaint,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agent-complaints"] });
-      setShowForm(false);
-      reset();
-    },
-  });
-
+  const { data, isLoading, isError } = useAgentComplaintsQuery();
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
   } = useForm({ defaultValues: { priority: "MEDIUM" } });
+
+  const createMut = useCreateComplaintMutation({
+    onSuccess: () => {
+      setShowForm(false);
+      reset();
+    },
+  });
 
   const complaints = data?.complaints ?? [];
 
@@ -45,7 +37,7 @@ export function AgentComplaintsPage() {
         <p className="text-sm text-zinc-400">{complaints.length} total</p>
         <button
           type="button"
-          onClick={() => setShowForm((s) => !s)}
+          onClick={() => setShowForm((state) => !state)}
           className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 py-2 text-sm text-emerald-100 transition hover:-translate-y-px"
         >
           {showForm ? "Cancel" : "+ Log complaint"}
@@ -54,7 +46,7 @@ export function AgentComplaintsPage() {
 
       {showForm && (
         <form
-          onSubmit={handleSubmit((v) => createMut.mutate(v))}
+          onSubmit={handleSubmit((values) => createMut.mutate(values))}
           className="mb-8 space-y-4 rounded-3xl border border-white/8 bg-white/3 p-6"
         >
           <div className="grid gap-4 md:grid-cols-2">
@@ -74,8 +66,10 @@ export function AgentComplaintsPage() {
                 className="rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-white outline-none focus:border-emerald-300/40"
                 {...register("priority")}
               >
-                {Object.values(COMPLAINT_PRIORITIES).map((p) => (
-                  <option key={p} value={p}>{p}</option>
+                {Object.values(COMPLAINT_PRIORITIES).map((priority) => (
+                  <option key={priority} value={priority}>
+                    {priority}
+                  </option>
                 ))}
               </select>
             </label>
@@ -87,7 +81,10 @@ export function AgentComplaintsPage() {
               rows={3}
               className="resize-none rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-white outline-none focus:border-emerald-300/40"
               placeholder="Describe the issue"
-              {...register("description", { required: "Required", minLength: { value: 10, message: "Min 10 characters" } })}
+              {...register("description", {
+                required: "Required",
+                minLength: { value: 10, message: "Min 10 characters" },
+              })}
             />
             {errors.description && <span className="text-sm text-amber-300">{errors.description.message}</span>}
           </label>
@@ -127,11 +124,12 @@ export function AgentComplaintsPage() {
 
       {isLoading && (
         <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-3xl bg-white/6" />
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="h-20 animate-pulse rounded-3xl bg-white/6" />
           ))}
         </div>
       )}
+
       {isError && (
         <div className="rounded-4xl border border-amber-300/20 bg-amber-300/10 p-5 text-amber-100">
           Failed to load complaints.
@@ -146,21 +144,21 @@ export function AgentComplaintsPage() {
 
       {!isLoading && !isError && complaints.length > 0 && (
         <div className="space-y-3">
-          {complaints.map((c) => (
-            <div key={c._id} className="rounded-3xl border border-white/8 bg-white/3 p-4">
+          {complaints.map((complaint) => (
+            <div key={complaint._id} className="rounded-3xl border border-white/8 bg-white/3 p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <span>{c.priority}</span>
-                    <span>·</span>
-                    <span>{c.category}</span>
-                    <span>·</span>
-                    <span>{new Date(c.createdAt).toLocaleDateString()}</span>
+                    <span>{complaint.priority}</span>
+                    <span>|</span>
+                    <span>{complaint.category}</span>
+                    <span>|</span>
+                    <span>{new Date(complaint.createdAt).toLocaleDateString()}</span>
                   </div>
-                  <p className="mt-2 text-sm text-zinc-200">{c.description}</p>
+                  <p className="mt-2 text-sm text-zinc-200">{complaint.description}</p>
                 </div>
-                <span className={`text-xs uppercase tracking-widest ${STATUS_COLORS[c.status] ?? "text-zinc-400"}`}>
-                  {c.status}
+                <span className={`text-xs uppercase tracking-widest ${STATUS_COLORS[complaint.status] ?? "text-zinc-400"}`}>
+                  {complaint.status}
                 </span>
               </div>
             </div>

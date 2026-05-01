@@ -44,6 +44,10 @@ const commissionStatementSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    dueDate: {
+      type: Date,
+      required: true,
+    },
     status: {
       type: String,
       enum: Object.values(COMMISSION_STATUSES),
@@ -69,6 +73,18 @@ const commissionStatementSchema = new mongoose.Schema(
     reviewNotes: {
       type: String,
       default: "",
+    },
+    rejectionReason: {
+      type: String,
+      default: "",
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+    settledAt: {
+      type: Date,
+      default: null,
     },
   },
   {

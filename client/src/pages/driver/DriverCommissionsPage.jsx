@@ -1,29 +1,18 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import { AppShell } from "../../components/shared/AppShell";
-import { getMyCommissions, submitReceipt } from "../../services/commissionService";
+import { useSubmitReceiptMutation } from "../../hooks/mutations/useCommissionMutations";
+import { useDriverCommissionsQuery } from "../../hooks/queries/useCommissionQueries";
 import { COMMISSION_STATUS_COLORS } from "../../constants/statuses";
 
-const MONTHS = [
-  "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec",
-];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export function DriverCommissionsPage() {
-  const qc = useQueryClient();
   const fileRefs = useRef({});
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["driver-commissions"],
-    queryFn: () => getMyCommissions(),
-  });
-
-  const uploadMut = useMutation({
-    mutationFn: ({ id, file }) => submitReceipt(id, file),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["driver-commissions"] }),
-  });
+  const { data, isLoading, isError } = useDriverCommissionsQuery();
+  const uploadMut = useSubmitReceiptMutation();
 
   const statements = data?.statements ?? [];
-  const totalOwed = statements.reduce((sum, s) => sum + (s.balanceDue ?? 0), 0);
+  const totalOwed = statements.reduce((sum, statement) => sum + (statement.balanceDue ?? 0), 0);
   const apiBase = import.meta.env.VITE_API_URL?.replace("/api/v1", "") ?? "";
 
   return (
@@ -40,11 +29,12 @@ export function DriverCommissionsPage() {
 
       {isLoading && (
         <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-28 animate-pulse rounded-3xl bg-white/6" />
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="h-28 animate-pulse rounded-3xl bg-white/6" />
           ))}
         </div>
       )}
+
       {isError && (
         <div className="rounded-4xl border border-amber-300/20 bg-amber-300/10 p-5 text-amber-100">
           Failed to load commission statements.
@@ -59,43 +49,43 @@ export function DriverCommissionsPage() {
 
       {!isLoading && !isError && statements.length > 0 && (
         <div className="space-y-4">
-          {statements.map((s) => {
-            const period = `${MONTHS[(s.periodMonth ?? 1) - 1]} ${s.periodYear}`;
-            const canUpload = ["DUE", "OVERDUE", "REJECTED"].includes(s.status);
+          {statements.map((statement) => {
+            const period = `${MONTHS[(statement.periodMonth ?? 1) - 1]} ${statement.periodYear}`;
+            const canUpload = ["DUE", "REJECTED"].includes(statement.status);
 
             return (
-              <div key={s._id} className="rounded-3xl border border-white/8 bg-white/3 p-5">
+              <div key={statement._id} className="rounded-3xl border border-white/8 bg-white/3 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <p className="text-base text-white">{period}</p>
                   <span
                     className={`rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-widest ${
-                      COMMISSION_STATUS_COLORS[s.status] ?? "text-zinc-400"
+                      COMMISSION_STATUS_COLORS[statement.status] ?? "text-zinc-400"
                     }`}
                   >
-                    {s.status}
+                    {statement.status}
                   </span>
                 </div>
 
-                <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                <div className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
                   <div>
                     <p className="text-xs text-zinc-600">Revenue</p>
-                    <p className="text-zinc-300">GHS {s.grossTripRevenue?.toFixed(2)}</p>
+                    <p className="text-zinc-300">GHS {statement.grossTripRevenue?.toFixed(2)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-zinc-600">Commission (10%)</p>
-                    <p className="text-amber-300">GHS {s.commissionTotal?.toFixed(2)}</p>
+                    <p className="text-amber-300">GHS {statement.commissionTotal?.toFixed(2)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-zinc-600">Balance due</p>
-                    <p className={s.balanceDue > 0 ? "text-red-300" : "text-emerald-300"}>
-                      GHS {s.balanceDue?.toFixed(2)}
+                    <p className={statement.balanceDue > 0 ? "text-red-300" : "text-emerald-300"}>
+                      GHS {statement.balanceDue?.toFixed(2)}
                     </p>
                   </div>
                 </div>
 
-                {s.receiptFileUrl && (
+                {statement.receiptFileUrl && (
                   <a
-                    href={`${apiBase}${s.receiptFileUrl}`}
+                    href={`${apiBase}${statement.receiptFileUrl}`}
                     target="_blank"
                     rel="noreferrer"
                     className="mt-3 block text-sm text-blue-300 underline"
@@ -104,8 +94,8 @@ export function DriverCommissionsPage() {
                   </a>
                 )}
 
-                {s.reviewNotes && (
-                  <p className="mt-2 text-sm text-zinc-500">Admin note: {s.reviewNotes}</p>
+                {statement.reviewNotes && (
+                  <p className="mt-2 text-sm text-zinc-500">Admin note: {statement.reviewNotes}</p>
                 )}
 
                 {canUpload && (
@@ -114,16 +104,20 @@ export function DriverCommissionsPage() {
                       type="file"
                       accept=".jpg,.jpeg,.png,.pdf"
                       className="hidden"
-                      ref={(el) => { fileRefs.current[s._id] = el; }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadMut.mutate({ id: s._id, file });
+                      ref={(element) => {
+                        fileRefs.current[statement._id] = element;
+                      }}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) {
+                          uploadMut.mutate({ id: statement._id, file });
+                        }
                       }}
                     />
                     <button
                       type="button"
                       disabled={uploadMut.isPending}
-                      onClick={() => fileRefs.current[s._id]?.click()}
+                      onClick={() => fileRefs.current[statement._id]?.click()}
                       className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-5 py-2.5 text-sm text-emerald-100 transition hover:-translate-y-px disabled:opacity-50"
                     >
                       {uploadMut.isPending ? "Uploading..." : "Upload payment receipt"}
@@ -131,7 +125,7 @@ export function DriverCommissionsPage() {
                   </div>
                 )}
 
-                {uploadMut.isError && uploadMut.variables?.id === s._id && (
+                {uploadMut.isError && uploadMut.variables?.id === statement._id && (
                   <p className="mt-2 text-sm text-amber-300">
                     {uploadMut.error?.response?.data?.message ?? "Upload failed"}
                   </p>

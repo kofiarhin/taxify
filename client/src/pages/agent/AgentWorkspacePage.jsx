@@ -1,27 +1,23 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { AppShell } from "../../components/shared/AppShell";
-import { getBookings } from "../../services/bookingService";
+import { useAgentBookingsQuery } from "../../hooks/queries/useBookingQueries";
 import { BOOKING_STATUS_COLORS } from "../../constants/statuses";
 
 export function AgentWorkspacePage() {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["agent-bookings"],
-    queryFn: () => getBookings({ limit: 20 }),
-    refetchInterval: 15000,
-  });
-
+  const { data, isLoading, isError } = useAgentBookingsQuery();
   const bookings = data?.bookings ?? [];
-  const active = bookings.filter((b) =>
-    ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAYMENT_PENDING"].includes(b.status)
+  const active = bookings.filter((booking) =>
+    ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAYMENT_PENDING"].includes(booking.status)
   );
-  const recent = bookings.filter((b) => ["PAID", "CANCELLED", "QUEUED"].includes(b.status));
+  const recent = bookings.filter((booking) =>
+    ["PAID", "CANCELLED", "QUEUED"].includes(booking.status)
+  );
 
   return (
     <AppShell eyebrow="Agent workspace" title="Dispatch board.">
       <div className="mb-5 flex items-center justify-between">
         <p className="text-sm text-zinc-400">
-          {active.length} active · {bookings.filter((b) => b.status === "QUEUED").length} queued
+          {active.length} active | {bookings.filter((booking) => booking.status === "QUEUED").length} queued
         </p>
         <Link
           to="/agent/bookings/new"
@@ -33,11 +29,12 @@ export function AgentWorkspacePage() {
 
       {isLoading && (
         <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-3xl bg-white/6" />
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-20 animate-pulse rounded-3xl bg-white/6" />
           ))}
         </div>
       )}
+
       {isError && (
         <div className="rounded-4xl border border-amber-300/20 bg-amber-300/10 p-5 text-amber-100">
           Failed to load bookings.
@@ -50,8 +47,8 @@ export function AgentWorkspacePage() {
             <section>
               <p className="mb-3 text-xs uppercase tracking-widest text-zinc-500">Active</p>
               <div className="space-y-3">
-                {active.map((b) => (
-                  <BookingRow key={b._id} booking={b} />
+                {active.map((booking) => (
+                  <BookingRow key={booking._id} booking={booking} />
                 ))}
               </div>
             </section>
@@ -61,8 +58,8 @@ export function AgentWorkspacePage() {
             <section>
               <p className="mb-3 text-xs uppercase tracking-widest text-zinc-500">Recent</p>
               <div className="space-y-3">
-                {recent.map((b) => (
-                  <BookingRow key={b._id} booking={b} />
+                {recent.map((booking) => (
+                  <BookingRow key={booking._id} booking={booking} />
                 ))}
               </div>
             </section>
@@ -79,21 +76,23 @@ export function AgentWorkspacePage() {
   );
 }
 
-function BookingRow({ booking: b }) {
+function BookingRow({ booking }) {
   return (
     <div className="rounded-3xl border border-white/8 bg-white/3 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-sm text-zinc-400">{b.bookingReference}</p>
-          <p className="mt-1 text-base text-white">{b.customerName}</p>
-          <p className="mt-1 text-sm text-zinc-500">{b.pickupAddress} → {b.dropoffAddress}</p>
+          <p className="text-sm text-zinc-400">{booking.bookingReference}</p>
+          <p className="mt-1 text-base text-white">{booking.customerName}</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            {booking.pickupAddress} {"->"} {booking.dropoffAddress}
+          </p>
         </div>
         <span
           className={`rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-widest ${
-            BOOKING_STATUS_COLORS[b.status] ?? "text-zinc-400"
+            BOOKING_STATUS_COLORS[booking.status] ?? "text-zinc-400"
           }`}
         >
-          {b.status}
+          {booking.status}
         </span>
       </div>
     </div>

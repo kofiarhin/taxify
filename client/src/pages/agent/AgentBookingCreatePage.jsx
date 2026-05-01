@@ -1,8 +1,7 @@
-import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { AppShell } from "../../components/shared/AppShell";
-import { createBooking } from "../../services/bookingService";
+import { useCreateBookingMutation } from "../../hooks/mutations/useBookingMutations";
 
 function Field({ label, error, children }) {
   return (
@@ -35,8 +34,7 @@ export function AgentBookingCreatePage() {
     },
   });
 
-  const mutation = useMutation({
-    mutationFn: createBooking,
+  const mutation = useCreateBookingMutation({
     onSuccess: () => navigate("/agent"),
   });
 
@@ -100,7 +98,7 @@ export function AgentBookingCreatePage() {
           <textarea
             placeholder="Any notes for the driver"
             rows={3}
-            className="rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-300/40 resize-none"
+            className="resize-none rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-300/40"
             {...register("specialInstructions")}
           />
         </Field>
@@ -123,7 +121,7 @@ export function AgentBookingCreatePage() {
             disabled={mutation.isPending}
             className="rounded-full border border-emerald-300/20 bg-emerald-300/14 px-6 py-3 text-sm text-emerald-100 transition hover:-translate-y-px disabled:opacity-50"
           >
-            {mutation.isPending ? "Creating..." : "Create & dispatch"}
+            {mutation.isPending ? "Creating..." : "Create and dispatch"}
           </button>
           <button
             type="button"

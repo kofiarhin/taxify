@@ -4,6 +4,7 @@ const uiSlice = createSlice({
   name: "ui",
   initialState: {
     notice: null,
+    socketState: "offline",
   },
   reducers: {
     setNotice(state, action) {
@@ -12,8 +13,11 @@ const uiSlice = createSlice({
     clearNotice(state) {
       state.notice = null;
     },
+    setSocketState(state, action) {
+      state.socketState = action.payload;
+    },
   },
 });
 
-export const { setNotice, clearNotice } = uiSlice.actions;
+export const { setNotice, clearNotice, setSocketState } = uiSlice.actions;
 export default uiSlice.reducer;
