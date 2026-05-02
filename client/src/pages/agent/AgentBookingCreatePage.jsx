@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { AppShell } from "../../components/shared/AppShell";
@@ -24,13 +25,16 @@ function Input({ className = "", ...props }) {
 
 export function AgentBookingCreatePage() {
   const navigate = useNavigate();
+  const [defaultPickupTime] = useState(() =>
+    new Date(Date.now() + 5 * 60000).toISOString().slice(0, 16)
+  );
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm({
     defaultValues: {
-      pickupTime: new Date(Date.now() + 5 * 60000).toISOString().slice(0, 16),
+      pickupTime: defaultPickupTime,
     },
   });
 

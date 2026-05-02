@@ -23,7 +23,6 @@ const ACTIVE_BOOKING_STATUSES = [
 
 const ACTIVE_ASSIGNMENT_STATUSES = [
   ASSIGNMENT_STATUSES.PENDING,
-  ASSIGNMENT_STATUSES.ACCEPTED,
 ];
 
 const UNPAID_COMMISSION_STATUSES = require("./commissionDebtService")
@@ -306,6 +305,14 @@ async function isDriverEligibleForDispatch(driver, options = {}) {
     return false;
   }
 
+  if (DriverProfile.schema.path("approvedAt") && !evaluated.approvedAt) {
+    return false;
+  }
+
+  if (DriverProfile.schema.path("approvedBy") && !evaluated.approvedBy) {
+    return false;
+  }
+
   const [hasBooking, hasAssignment] = await Promise.all([
     hasOtherActiveBooking(evaluated._id, null, normalizedOptions),
     hasActiveAssignment(evaluated._id, null, normalizedOptions),
@@ -326,13 +333,37 @@ async function returnDriverToAvailable(driverProfileId) {
   const driver = await DriverProfile.findById(driverProfileId);
   if (!driver) throw new ApiError(404, "Driver profile not found");
 
-  if (!isManualLifecycleBlock(driver)) {
+  driver.currentAssignmentId = null;
+  await driver.save();
+
+  const evaluated = await evaluateDriverLifecycle(driver._id);
+
+  if (
+    !isManualLifecycleBlock(evaluated) &&
+    (await canRestoreDriverAvailability(evaluated))
+  ) {
+    evaluated.status = DRIVER_STATUSES.ACTIVE;
+    evaluated.lifecycleReason = evaluated.lifecycleReason ?? LIFECYCLE_REASONS.NONE;
+    await evaluated.save();
+    return evaluateDriverLifecycle(evaluated._id);
+  }
+
+  return evaluated;
+}
+
+async function setDriverAvailableIfEligible(driverProfileId, options = {}) {
+  const driver = await DriverProfile.findById(driverProfileId);
+  if (!driver) throw new ApiError(404, "Driver profile not found");
+
+  if (
+    !isManualLifecycleBlock(driver) &&
+    (await canRestoreDriverAvailability(driver, options))
+  ) {
     driver.status = DRIVER_STATUSES.ACTIVE;
     driver.lifecycleReason = driver.lifecycleReason ?? LIFECYCLE_REASONS.NONE;
+    await driver.save({ session: options.session });
   }
-  driver.currentAssignmentId = null;
-  driver.lastAssignedAt = new Date();
-  await driver.save();
+
   return evaluateDriverLifecycle(driver._id);
 }
 
@@ -390,6 +421,7 @@ module.exports = {
   normalizeLifecycleOptions,
   releaseDriverFromAssignment,
   returnDriverToAvailable,
+  setDriverAvailableIfEligible,
   setDriverBusy,
   syncDriverSuspension: evaluateDriverLifecycle,
 };

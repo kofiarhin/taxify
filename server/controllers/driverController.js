@@ -1,5 +1,6 @@
 const DriverProfile = require("../models/DriverProfile");
-const { DRIVER_STATUSES, LIFECYCLE_REASONS } = require("../constants/statuses");
+const Booking = require("../models/Booking");
+const { DRIVER_STATUSES, LIFECYCLE_REASONS, BOOKING_STATUSES } = require("../constants/statuses");
 const { ApiError } = require("../utils/apiError");
 const { asyncHandler } = require("../utils/asyncHandler");
 const { registerDriver, getPendingDrivers, updateDriverStatus } = require("../services/userService");
@@ -23,6 +24,39 @@ const getPending = asyncHandler(async (_req, res) => {
   res.json({
     success: true,
     data: { drivers },
+  });
+});
+
+const list = asyncHandler(async (_req, res) => {
+  const drivers = await DriverProfile.find()
+    .populate("userId", "fullName email phone role isActive")
+    .populate("currentAssignmentId")
+    .sort({ createdAt: -1 });
+
+  const activeBookings = await Booking.find({
+    assignedDriverId: { $in: drivers.map((driver) => driver._id) },
+    status: {
+      $in: [
+        BOOKING_STATUSES.ASSIGNED,
+        BOOKING_STATUSES.ACCEPTED,
+        BOOKING_STATUSES.IN_PROGRESS,
+        BOOKING_STATUSES.PAYMENT_PENDING,
+      ],
+    },
+  }).select("bookingReference customerName pickupAddress dropoffAddress status assignedDriverId");
+
+  const bookingByDriverId = new Map(
+    activeBookings.map((booking) => [booking.assignedDriverId.toString(), booking])
+  );
+
+  res.json({
+    success: true,
+    data: {
+      drivers: drivers.map((driver) => ({
+        ...driver.toObject(),
+        assignedBooking: bookingByDriverId.get(driver._id.toString()) ?? null,
+      })),
+    },
   });
 });
 
@@ -98,4 +132,4 @@ const deactivate = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { register, getPending, approve, suspend, reactivate, deactivate, me };
+module.exports = { register, list, getPending, approve, suspend, reactivate, deactivate, me };

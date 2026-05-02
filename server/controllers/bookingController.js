@@ -21,7 +21,22 @@ const createBooking = asyncHandler(async (req, res) => {
   });
 
   emitDomainEvent("booking.created", { bookingId: booking._id.toString() });
-  await dispatchBooking(booking._id, ASSIGNMENT_MODES.AUTO);
+  try {
+    await dispatchBooking(booking._id, ASSIGNMENT_MODES.AUTO);
+  } catch (error) {
+    console.warn("[booking] Auto-dispatch failed after booking creation", {
+      bookingId: booking._id.toString(),
+      error: error.message,
+    });
+    booking.status = BOOKING_STATUSES.QUEUED;
+    booking.assignedDriverId = null;
+    booking.queueEnteredAt = booking.queueEnteredAt ?? new Date();
+    await booking.save();
+    emitDomainEvent("booking.queued", {
+      bookingId: booking._id.toString(),
+      dispatchError: true,
+    });
+  }
   const refreshed = await Booking.findById(booking._id);
 
   await AuditLog.create({

@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getPendingDrivers } from "../../services/driverService";
-import { getUsers } from "../../services/userService";
+import { getDrivers, getPendingDrivers } from "../../services/driverService";
 import { queryKeys } from "../queryKeys";
 
 export function usePendingDriversQuery() {
@@ -13,9 +12,6 @@ export function usePendingDriversQuery() {
 export function useAllDriversQuery() {
   return useQuery({
     queryKey: queryKeys.driversAll,
-    queryFn: async () => {
-      const users = await getUsers({ limit: 100 });
-      return users.filter((user) => user.role === "DRIVER");
-    },
+    queryFn: getDrivers,
   });
 }

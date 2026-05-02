@@ -35,6 +35,8 @@ async function createDriverAccount(options = {}) {
   const driverProfile = await DriverProfile.create({
     userId: user._id,
     status: options.status ?? DRIVER_STATUSES.ACTIVE,
+    approvedBy: options.approvedBy ?? (options.status === DRIVER_STATUSES.PENDING_APPROVAL ? null : user._id),
+    approvedAt: options.approvedAt ?? (options.status === DRIVER_STATUSES.PENDING_APPROVAL ? null : new Date()),
     licenseNumber: options.licenseNumber ?? `LIC-${Math.random().toString(36).slice(2, 8)}`,
     licenseExpiry: options.licenseExpiry ?? new Date("2030-01-01T00:00:00.000Z"),
     vehicleMake: options.vehicleMake ?? "Toyota",

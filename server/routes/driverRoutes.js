@@ -7,6 +7,7 @@ const { validateRequest } = require("../middleware/validateRequest");
 const { driverValidationSchemas } = require("../validators/driverValidators");
 const {
   register,
+  list,
   getPending,
   approve,
   suspend,
@@ -29,6 +30,7 @@ const driverActionSchema = z.object({
 
 router.post("/register", validateRequest(driverValidationSchemas.register), register);
 router.get("/me", auth, requireRole(ROLES.DRIVER), me);
+router.get("/", auth, requireRole(ROLES.ADMIN), list);
 router.get("/pending", auth, requireRole(ROLES.ADMIN), getPending);
 router.post("/:id/approve", auth, requireRole(ROLES.ADMIN), validateRequest(driverActionSchema), approve);
 router.post("/:id/suspend", auth, requireRole(ROLES.ADMIN), validateRequest(driverActionSchema), suspend);

@@ -15,6 +15,11 @@ export async function getPendingDrivers() {
   return response.data.data.drivers;
 }
 
+export async function getDrivers() {
+  const response = await api.get("/drivers");
+  return response.data.data.drivers;
+}
+
 export async function approveDriver(id) {
   const response = await api.post(`/drivers/${id}/approve`);
   return response.data.data.driver;

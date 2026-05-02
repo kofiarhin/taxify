@@ -20,6 +20,7 @@ const { ROLES } = require("../constants/roles");
 const {
   BOOKING_STATUSES,
   DRIVER_STATUSES,
+  ASSIGNMENT_STATUSES,
   COMMISSION_STATUSES,
   LIFECYCLE_REASONS,
 } = require("../constants/statuses");
@@ -66,14 +67,54 @@ describe("dispatch and operations flow", () => {
   it("auto-assigns when an active driver exists and queues when none exists", async () => {
     const { driverProfile } = await createDriverAccount();
     const assigned = await createBookingVia(ROLES.AGENT);
+    const attempt = await AssignmentAttempt.findOne({
+      bookingId: assigned.response.body.data.booking._id,
+      driverId: driverProfile._id,
+    });
+    const refreshedDriver = await DriverProfile.findById(driverProfile._id);
 
     expect(assigned.response.body.data.booking.status).toBe(BOOKING_STATUSES.ASSIGNED);
     expect(String(assigned.response.body.data.booking.assignedDriverId)).toBe(String(driverProfile._id));
+    expect(attempt.status).toBe(ASSIGNMENT_STATUSES.PENDING);
+    expect(refreshedDriver.status).toBe(DRIVER_STATUSES.BUSY);
+    expect(String(refreshedDriver.currentAssignmentId)).toBe(String(attempt._id));
+    expect(refreshedDriver.lastAssignedAt).toBeInstanceOf(Date);
 
     await DriverProfile.deleteMany({});
 
     const queued = await createBookingVia(ROLES.AGENT, bookingPayload({ customerName: "Lina Frost" }));
     expect(queued.response.body.data.booking.status).toBe(BOOKING_STATUSES.QUEUED);
+  });
+
+  it("does not assign a driver with an active pending assignment", async () => {
+    const busyDriver = await createDriverAccount({ vehiclePlate: "TX-BUSY" });
+    const availableDriver = await createDriverAccount({ vehiclePlate: "TX-FREE" });
+    const existingBooking = await Booking.create({
+      ...bookingPayload({ customerName: "Existing Customer" }),
+      bookingReference: "TXF-EXISTING",
+      createdBy: busyDriver.user._id,
+      status: BOOKING_STATUSES.ASSIGNED,
+      assignedDriverId: busyDriver.driverProfile._id,
+    });
+    const pendingAttempt = await AssignmentAttempt.create({
+      bookingId: existingBooking._id,
+      driverId: busyDriver.driverProfile._id,
+      attemptNumber: 1,
+      status: ASSIGNMENT_STATUSES.PENDING,
+      expiresAt: new Date(Date.now() + 60000),
+    });
+    await DriverProfile.findByIdAndUpdate(busyDriver.driverProfile._id, {
+      status: DRIVER_STATUSES.BUSY,
+      currentAssignmentId: pendingAttempt._id,
+    });
+
+    const created = await createBookingVia(ROLES.AGENT);
+
+    expect(created.response.statusCode).toBe(201);
+    expect(created.response.body.data.booking.status).toBe(BOOKING_STATUSES.ASSIGNED);
+    expect(String(created.response.body.data.booking.assignedDriverId)).toBe(
+      String(availableDriver.driverProfile._id)
+    );
   });
 
   it("excludes suspended drivers from auto-dispatch", async () => {
@@ -94,6 +135,23 @@ describe("dispatch and operations flow", () => {
     expect(queued.response.statusCode).toBe(201);
     expect(queued.response.body.data.booking.status).toBe(BOOKING_STATUSES.QUEUED);
     expect(queued.response.body.data.booking.assignedDriverId).toBeNull();
+  });
+
+  it("lists real driver profiles for admins without password hashes", async () => {
+    const admin = await createAuthenticatedRequest(ROLES.ADMIN);
+    const driver = await createDriverAccount({ vehiclePlate: "TX-LIST" });
+
+    const response = await request(app)
+      .get("/api/v1/drivers")
+      .set(admin.headers);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.data.drivers).toHaveLength(1);
+    expect(response.body.data.drivers[0]._id).toBe(String(driver.driverProfile._id));
+    expect(response.body.data.drivers[0].status).toBe(DRIVER_STATUSES.ACTIVE);
+    expect(response.body.data.drivers[0].userId.email).toBe(driver.user.email);
+    expect(response.body.data.drivers[0].userId.passwordHash).toBeUndefined();
+    expect(response.body.data.drivers[0]).toHaveProperty("currentAssignmentId");
   });
 
   it("requeues expired assignments and restores driver availability", async () => {
