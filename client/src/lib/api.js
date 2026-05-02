@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const baseURL = import.meta.env.VITE_API_URL || (import.meta.env.VITEST ? "http://localhost:5000/api/v1" : "");
+const baseURL = import.meta.env.VITE_API_URL;
 
 if (!baseURL) {
   throw new Error("Missing VITE_API_URL configuration");

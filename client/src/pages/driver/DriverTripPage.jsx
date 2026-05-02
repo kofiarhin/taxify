@@ -193,18 +193,18 @@ export function DriverTripPage() {
             <div className="mt-4 grid grid-cols-3 gap-4">
               <div className="rounded-2xl border border-white/8 bg-white/3 p-4 text-center">
                 <p className="text-xs text-zinc-600">Duration</p>
-                <p className="mt-1 text-lg text-white">{trip?.durationMinutes ?? "â€”"} min</p>
+                <p className="mt-1 text-lg text-white">{trip?.durationMinutes ?? "-"} min</p>
               </div>
               <div className="rounded-2xl border border-white/8 bg-white/3 p-4 text-center">
                 <p className="text-xs text-zinc-600">Fare</p>
                 <p className="mt-1 text-lg text-emerald-300">
-                  GHS {trip?.fare?.toFixed(2) ?? booking.finalFare?.toFixed(2) ?? "â€”"}
+                  GHS {trip?.fare?.toFixed(2) ?? booking.finalFare?.toFixed(2) ?? "-"}
                 </p>
               </div>
               <div className="rounded-2xl border border-white/8 bg-white/3 p-4 text-center">
                 <p className="text-xs text-zinc-600">Commission</p>
                 <p className="mt-1 text-lg text-amber-300">
-                  GHS {trip?.commissionAmount?.toFixed(2) ?? "â€”"}
+                  GHS {trip?.commissionAmount?.toFixed(2) ?? "-"}
                 </p>
               </div>
             </div>

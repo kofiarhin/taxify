@@ -3,10 +3,12 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AgentBookingCreatePage } from "../src/pages/agent/AgentBookingCreatePage";
 import { AgentQueuePage } from "../src/pages/agent/AgentQueuePage";
+import { AgentWorkspacePage } from "../src/pages/agent/AgentWorkspacePage";
 import { renderWithProviders } from "./test-utils";
 
 const mockCreateBookingMutation = vi.fn();
 const mockQueueQuery = vi.fn();
+const mockAgentBookingsQuery = vi.fn();
 const mockRetryMutation = vi.fn();
 
 vi.mock("../src/hooks/mutations/useBookingMutations", () => ({
@@ -16,13 +18,55 @@ vi.mock("../src/hooks/mutations/useBookingMutations", () => ({
 
 vi.mock("../src/hooks/queries/useBookingQueries", () => ({
   useQueueQuery: () => mockQueueQuery(),
+  useAgentBookingsQuery: () => mockAgentBookingsQuery(),
 }));
 
 describe("booking pages", () => {
   beforeEach(() => {
     mockCreateBookingMutation.mockReset();
     mockQueueQuery.mockReset();
+    mockAgentBookingsQuery.mockReset();
     mockRetryMutation.mockReset();
+  });
+
+  it("keeps canonical backend statuses visible on the agent board", () => {
+    mockAgentBookingsQuery.mockReturnValue({
+      data: {
+        bookings: [
+          {
+            _id: "booking-1",
+            bookingReference: "TXF-20260502-AF913",
+            customerName: "Nora Kent",
+            pickupAddress: "14 Market Row",
+            dropoffAddress: "88 Bishopsgate",
+            status: "DRIVER_ASSIGNED",
+          },
+          {
+            _id: "booking-2",
+            bookingReference: "TXF-20260502-BQ214",
+            customerName: "Milo Hart",
+            pickupAddress: "City Hall",
+            dropoffAddress: "River Wharf",
+            status: "COMPLETED",
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    renderWithProviders(<AgentWorkspacePage />, {
+      preloadedState: {
+        auth: {
+          token: "token",
+          user: { role: "AGENT", fullName: "Ari Fleet", email: "agent@taxify.local" },
+          status: "authenticated",
+        },
+      },
+    });
+
+    expect(screen.getByText("DRIVER_ASSIGNED")).toBeInTheDocument();
+    expect(screen.getByText("COMPLETED")).toBeInTheDocument();
   });
 
   it("renders booking create loading, error, and success states", async () => {

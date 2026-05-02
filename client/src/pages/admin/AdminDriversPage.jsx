@@ -10,6 +10,7 @@ import { useAllDriversQuery, usePendingDriversQuery } from "../../hooks/queries/
 import { DRIVER_STATUS_COLORS } from "../../constants/statuses";
 
 const TABS = ["pending", "all"];
+const SUSPENDABLE_STATUSES = new Set(["ACTIVE", "ASSIGNED", "BUSY", "ON_TRIP"]);
 
 export function AdminDriversPage() {
   const [tab, setTab] = useState("pending");
@@ -116,7 +117,7 @@ export function AdminDriversPage() {
                     </button>
                   )}
 
-                  {(status === "ACTIVE" || status === "BUSY") && (
+                  {SUSPENDABLE_STATUSES.has(status) && (
                     <div className="flex items-center gap-2">
                       <input
                         placeholder="Reason (optional)"

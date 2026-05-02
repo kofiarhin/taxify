@@ -7,5 +7,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: "./test/setup.js",
+    env: {
+      VITE_API_URL: "/api/v1",
+    },
   },
 });

@@ -3,15 +3,27 @@ import { AppShell } from "../../components/shared/AppShell";
 import { useAgentBookingsQuery } from "../../hooks/queries/useBookingQueries";
 import { BOOKING_STATUS_COLORS } from "../../constants/statuses";
 
+const activeStatuses = new Set([
+  "PENDING_ASSIGNMENT",
+  "ASSIGNED",
+  "DRIVER_ASSIGNED",
+  "ACCEPTED",
+  "DRIVER_ACCEPTED",
+  "IN_PROGRESS",
+  "TRIP_IN_PROGRESS",
+  "TRIP_ENDED",
+  "AWAITING_CLIENT_CONFIRMATION",
+  "PAYMENT_PENDING",
+  "AWAITING_DRIVER_PAYMENT_CONFIRMATION",
+]);
+
+const recentStatuses = new Set(["PAID", "COMPLETED", "CANCELLED", "QUEUED"]);
+
 export function AgentWorkspacePage() {
   const { data, isLoading, isError } = useAgentBookingsQuery();
   const bookings = data?.bookings ?? [];
-  const active = bookings.filter((booking) =>
-    ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAYMENT_PENDING"].includes(booking.status)
-  );
-  const recent = bookings.filter((booking) =>
-    ["PAID", "CANCELLED", "QUEUED"].includes(booking.status)
-  );
+  const active = bookings.filter((booking) => activeStatuses.has(booking.status));
+  const recent = bookings.filter((booking) => recentStatuses.has(booking.status));
 
   return (
     <AppShell eyebrow="Agent workspace" title="Dispatch board.">
@@ -68,6 +80,12 @@ export function AgentWorkspacePage() {
           {bookings.length === 0 && (
             <div className="rounded-4xl border border-white/8 bg-white/3 p-6 text-zinc-400">
               No bookings yet. Create the first one.
+            </div>
+          )}
+
+          {bookings.length > 0 && active.length === 0 && recent.length === 0 && (
+            <div className="rounded-4xl border border-white/8 bg-white/3 p-6 text-zinc-400">
+              No displayable bookings match the current board groups.
             </div>
           )}
         </div>
