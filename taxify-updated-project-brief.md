@@ -4,7 +4,7 @@
 
 Taxify is a web-based, real-time taxi booking and dispatch platform that enables clients to request rides directly, while providing seamless coordination between clients, drivers, and administrators.
 
-The system replaces manual workflows with a centralized, event-driven platform that supports live booking, automatic driver assignment, trip tracking, and verified payment completion.
+The system replaces manual workflows with a centralized, event-driven platform that supports live booking, automatic driver assignment, trip tracking, verified payment completion, and post-trip driver review.
 
 ---
 
@@ -18,6 +18,7 @@ The system replaces manual workflows with a centralized, event-driven platform t
 - Driver accept/reject workflow  
 - Trip lifecycle management (start → end → fare calculation)  
 - Dual confirmation system (Client + Driver)  
+- Post-trip driver review and 1-5 rating system  
 - Cash payment tracking with validation  
 - Commission system (10%)  
 - Driver onboarding + approval system  
@@ -44,6 +45,8 @@ The system replaces manual workflows with a centralized, event-driven platform t
 14. Payment is recorded  
 15. Booking becomes PAID → COMPLETED  
 16. Driver returns to ACTIVE/available state  
+17. Client is prompted to review the driver  
+18. Driver rating aggregate updates after review submission  
 
 ---
 
@@ -85,6 +88,21 @@ The system replaces manual workflows with a centralized, event-driven platform t
 
 ---
 
+## Driver Review Flow
+
+- Reviews are available only after a client-owned booking is COMPLETED  
+- Client rates the assigned driver from 1 to 5  
+- Rating 5 represents best performance  
+- Optional written feedback can be submitted with the rating  
+- Each booking can receive only one driver review  
+- Duplicate reviews are blocked by backend validation and database constraints  
+- Driver profile rating aggregates update automatically  
+- Drivers can see aggregate rating and review count  
+- New drivers display "No reviews yet" instead of a misleading 0.0 rating  
+- Admins can use driver review data for performance monitoring  
+
+---
+
 ## Commission System
 
 - 10% commission per completed trip  
@@ -101,6 +119,7 @@ The system replaces manual workflows with a centralized, event-driven platform t
 - Full system visibility  
 - View all bookings (client + agent created)  
 - Monitor driver performance  
+- View driver rating and review count  
 - Approve driver onboarding  
 - Manage disputes & complaints  
 - Override booking states (cancel/complete/reassign)  
@@ -124,6 +143,7 @@ The system replaces manual workflows with a centralized, event-driven platform t
 - Track trip status in real-time  
 - View fare after trip completion  
 - Confirm trip completion  
+- Review assigned driver after completed trips  
 - View booking history  
 - Submit complaints  
 
@@ -135,6 +155,7 @@ The system replaces manual workflows with a centralized, event-driven platform t
 - Provide real-time visibility for all stakeholders  
 - Ensure accurate fare and payment tracking  
 - Maintain driver accountability and availability  
+- Capture client feedback to improve driver performance oversight  
 - Support scalable dispatch operations  
 - Deliver a clean, reliable trip lifecycle system  
 

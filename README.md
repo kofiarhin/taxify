@@ -1,12 +1,13 @@
 # Taxify
 
-Taxify is a taxi dispatch and operations platform built as a full-stack JavaScript application. The current repository contains the foundation slice: authenticated role-based access, protected frontend routing, seeded demo accounts, admin user listing, and driver onboarding and approval APIs.
+Taxify is a taxi dispatch and ride management platform built as a full-stack JavaScript application. The app supports client-led ride booking, automatic driver assignment, real-time trip tracking, dual trip/payment confirmation, commission tracking, complaints, and post-trip driver reviews.
 
 The product direction is a multi-role system for taxi operations:
 
-- `ADMIN` manages staff users and driver approval
-- `AGENT` handles dispatch workflows
-- `DRIVER` uses a mobile-friendly driver workspace
+- `ADMIN` manages users, drivers, queues, trips, commissions, complaints, and analytics
+- `AGENT` handles staff-created bookings, dispatch queue work, and complaints
+- `DRIVER` accepts assignments, runs trips, confirms payment, and tracks commissions
+- `CLIENT` creates rides, tracks the assigned driver, confirms completion, and reviews drivers
 
 ## Current Status
 
@@ -15,22 +16,30 @@ Implemented now:
 - Backend environment validation with fail-fast startup
 - JWT authentication and `/auth/me` session recovery
 - Role-based route protection in both API and frontend
-- Admin user list endpoint and admin users page
+- Admin user, booking, queue, driver, trip, commission, complaint, and dashboard pages
 - Driver registration plus admin approval, suspension, and reactivation endpoints
+- Client registration and self-service booking
+- Automatic driver assignment with queue fallback
+- Driver assignment accept/reject workflow
+- Trip lifecycle tracking: assigned, accepted, in progress, ended, completion confirmation, payment confirmation, completed
+- Client trip tracker with fare and driver details
+- Post-trip driver review prompt with 1-5 rating and optional comment
+- Driver aggregate rating and review count
+- Cash payment confirmation with commission generation
+- Monthly commission tracking and receipt review
+- Complaint creation and admin resolution workflow
 - Shared Axios API client using `VITE_API_URL`
 - Redux Toolkit for auth, navigation, and UI state
 - TanStack Query wired into frontend data fetching
-- Demo account seeding for local development
+- Fresh local user seeding for admin, driver, and client accounts
 - Jest backend tests and Vitest frontend tests
 
 Planned next:
 
-- Booking creation and dispatch queue
-- Driver assignment accept/reject loop
-- Trip lifecycle tracking
-- Cash payment confirmation
-- Commission workflows
-- Admin analytics
+- Booking history views
+- Review history and moderation tools
+- Expanded admin reporting
+- Deployment workflow hardening
 
 ## Tech Stack
 
@@ -134,11 +143,13 @@ Make sure a MongoDB instance is available at the `MONGODB_URI` in your root `.en
 npm run seed:users
 ```
 
+The seed command clears existing collections first, then creates a fresh set of users and an approved driver profile.
+
 Seeded accounts:
 
 - `admin@taxify.local` / `TaxifyPass123`
-- `agent@taxify.local` / `TaxifyPass123`
 - `driver@taxify.local` / `TaxifyPass123`
+- `client@taxify.local` / `TaxifyPass123`
 
 ### 5. Run the app
 
@@ -187,10 +198,26 @@ From `client/`:
 Current role-aware routes:
 
 - `/login`
+- `/register-client`
 - `/admin`
+- `/admin/bookings`
+- `/admin/queue`
+- `/admin/drivers`
+- `/admin/trips`
+- `/admin/commissions`
+- `/admin/complaints`
 - `/admin/users`
 - `/agent`
+- `/agent/bookings/new`
+- `/agent/queue`
+- `/agent/complaints`
 - `/driver`
+- `/driver/trip`
+- `/driver/trips`
+- `/driver/commissions`
+- `/client`
+- `/client/bookings/new`
+- `/client/bookings/current`
 
 Unauthenticated users are redirected to `/login`. Authenticated users are redirected to the correct workspace for their role.
 
@@ -207,15 +234,41 @@ Current endpoints:
 - `GET /health`
 - `POST /auth/login`
 - `POST /auth/logout`
+- `POST /auth/register-client`
 - `GET /auth/me`
 - `GET /users`
 - `POST /users`
 - `POST /drivers/register`
+- `GET /drivers`
 - `GET /drivers/me`
 - `GET /drivers/pending`
 - `POST /drivers/:id/approve`
 - `POST /drivers/:id/suspend`
 - `POST /drivers/:id/reactivate`
+- `POST /drivers/:id/deactivate`
+- `GET /bookings`
+- `POST /bookings`
+- `POST /bookings/:id/cancel`
+- `GET /assignments/me`
+- `POST /assignments/:id/accept`
+- `POST /assignments/:id/reject`
+- `POST /trips/:bookingId/start`
+- `POST /trips/:bookingId/end`
+- `POST /trips/:bookingId/confirm-payment`
+- `GET /commissions`
+- `POST /commissions/:id/submit-receipt`
+- `POST /commissions/:id/approve`
+- `POST /commissions/:id/reject`
+- `POST /commissions/:id/settle`
+- `GET /complaints`
+- `POST /complaints`
+- `PATCH /complaints/:id`
+- `POST /complaints/:id/resolve`
+- `GET /dashboard/summary`
+- `POST /client/bookings`
+- `GET /client/bookings/current`
+- `POST /client/bookings/:id/confirm-complete`
+- `POST /client/bookings/:id/review`
 
 Access is enforced with JWT auth and role guards where required.
 
@@ -238,7 +291,13 @@ Current test coverage includes:
 
 - health endpoint
 - authentication flow
-- frontend app rendering
+- role protection
+- booking dispatch and queue behavior
+- driver assignment and trip lifecycle
+- client-led dual confirmation flow
+- post-trip driver reviews and rating aggregates
+- commission, complaint, and dashboard flows
+- frontend app, protected routes, booking pages, driver pages, and review prompt interactions
 
 ## Deployment Notes
 
@@ -260,4 +319,4 @@ This README only covers local development. Deployment workflow changes should fo
 
 ## Known Scope Boundary
 
-This repository is not yet a complete dispatch platform. It currently provides the foundation layer that later booking, trip, payment, complaint, and commission modules will build on.
+The core dispatch and client ride flow is implemented. Remaining product growth areas include richer booking history, driver review moderation, deeper reporting, notification workflows, and production deployment automation.
