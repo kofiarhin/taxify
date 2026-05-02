@@ -25,9 +25,39 @@ const tripSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    distanceKm: {
+      type: Number,
+      default: null,
+    },
     fare: {
       type: Number,
       default: null,
+    },
+    fareBreakdown: {
+      baseFare: {
+        type: Number,
+        default: 0,
+      },
+      durationFare: {
+        type: Number,
+        default: 0,
+      },
+      distanceFare: {
+        type: Number,
+        default: 0,
+      },
+      manualFare: {
+        type: Number,
+        default: null,
+      },
+    },
+    isManualFareOverride: {
+      type: Boolean,
+      default: false,
+    },
+    fareNotes: {
+      type: String,
+      default: "",
     },
     commissionAmount: {
       type: Number,

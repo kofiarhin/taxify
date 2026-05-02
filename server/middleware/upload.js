@@ -1,10 +1,14 @@
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
 const { ApiError } = require("../utils/apiError");
+
+const receiptUploadDir = path.join(__dirname, "../uploads/receipts");
 
 const storage = multer.diskStorage({
   destination(_req, _file, cb) {
-    cb(null, path.join(__dirname, "../uploads/receipts"));
+    fs.mkdirSync(receiptUploadDir, { recursive: true });
+    cb(null, receiptUploadDir);
   },
   filename(_req, file, cb) {
     const ext = path.extname(file.originalname).toLowerCase();

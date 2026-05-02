@@ -1,9 +1,10 @@
 const CommissionStatement = require("../models/CommissionStatement");
 const DriverProfile = require("../models/DriverProfile");
+const Trip = require("../models/Trip");
 const { env } = require("../config/env");
 const { COMMISSION_STATUSES } = require("../constants/statuses");
 const { ApiError } = require("../utils/apiError");
-const { syncDriverSuspension } = require("./driverStatusService");
+const { evaluateDriverLifecycle, syncDriverSuspension } = require("./driverStatusService");
 const { emitDomainEvent } = require("../socket");
 
 const COMMISSION_TRANSITIONS = {
@@ -46,6 +47,10 @@ function normalizeSettlement(statement) {
   statement.balanceDue = Math.max(0, Number((statement.commissionTotal - statement.amountPaid).toFixed(2)));
 }
 
+function roundMoney(value) {
+  return Number(value.toFixed(2));
+}
+
 async function reduceDriverDebt(driverId, amount) {
   if (amount <= 0) {
     return;
@@ -62,7 +67,7 @@ async function reduceDriverDebt(driverId, amount) {
 
 async function recordTripCommission(trip) {
   const { month, year } = getStatementPeriod(trip.endedAt ?? trip.paymentConfirmedAt ?? new Date());
-  const commission = trip.commissionAmount ?? trip.fare * env.COMMISSION_RATE;
+  const commission = roundMoney(trip.commissionAmount ?? trip.fare * env.COMMISSION_RATE);
 
   let statement = await CommissionStatement.findOne({
     driverId: trip.driverId,
@@ -84,9 +89,11 @@ async function recordTripCommission(trip) {
       status: COMMISSION_STATUSES.DUE,
     });
   } else {
-    statement.tripIds.push(trip._id);
-    statement.grossTripRevenue += trip.fare;
-    statement.commissionTotal += commission;
+    if (!statement.tripIds.some((tripId) => tripId.toString() === trip._id.toString())) {
+      statement.tripIds.push(trip._id);
+      statement.grossTripRevenue = roundMoney(statement.grossTripRevenue + trip.fare);
+      statement.commissionTotal = roundMoney(statement.commissionTotal + commission);
+    }
     normalizeSettlement(statement);
     if (statement.status === COMMISSION_STATUSES.SETTLED) {
       statement.status = COMMISSION_STATUSES.DUE;
@@ -103,6 +110,133 @@ async function recordTripCommission(trip) {
   emitDomainEvent("commission.updated", { statementId: statement._id.toString(), driverId: trip.driverId.toString() });
 
   return statement;
+}
+
+async function recalculateDriverDebt(driverId) {
+  const [result] = await CommissionStatement.aggregate([
+    {
+      $match: {
+        driverId,
+        status: { $ne: COMMISSION_STATUSES.SETTLED },
+        balanceDue: { $gt: 0 },
+      },
+    },
+    { $group: { _id: "$driverId", balanceDue: { $sum: "$balanceDue" } } },
+  ]);
+
+  await DriverProfile.findByIdAndUpdate(driverId, {
+    commissionDebt: roundMoney(result?.balanceDue ?? 0),
+  });
+}
+
+async function upsertStatementFromTrips(driverId, periodMonth, periodYear, trips) {
+  const grossTripRevenue = roundMoney(
+    trips.reduce((sum, trip) => sum + (trip.fare ?? 0), 0)
+  );
+  const commissionTotal = roundMoney(
+    trips.reduce(
+      (sum, trip) => sum + (trip.commissionAmount ?? (trip.fare ?? 0) * env.COMMISSION_RATE),
+      0
+    )
+  );
+
+  let statement = await CommissionStatement.findOne({
+    driverId,
+    periodMonth,
+    periodYear,
+  });
+
+  if (!statement) {
+    statement = await CommissionStatement.create({
+      driverId,
+      periodMonth,
+      periodYear,
+      tripIds: trips.map((trip) => trip._id),
+      grossTripRevenue,
+      commissionRate: env.COMMISSION_RATE,
+      commissionTotal,
+      amountPaid: 0,
+      balanceDue: commissionTotal,
+      dueDate: getStatementDueDate(periodMonth, periodYear),
+      status:
+        commissionTotal > 0 ? COMMISSION_STATUSES.DUE : COMMISSION_STATUSES.SETTLED,
+    });
+    return { statement, created: true };
+  }
+
+  statement.tripIds = trips.map((trip) => trip._id);
+  statement.grossTripRevenue = grossTripRevenue;
+  statement.commissionRate = env.COMMISSION_RATE;
+  statement.commissionTotal = commissionTotal;
+  normalizeSettlement(statement);
+  if (statement.balanceDue === 0 && statement.status !== COMMISSION_STATUSES.SETTLED) {
+    statement.status = COMMISSION_STATUSES.SETTLED;
+    statement.settledAt = statement.settledAt ?? new Date();
+  }
+  if (statement.balanceDue > 0 && statement.status === COMMISSION_STATUSES.SETTLED) {
+    statement.status = COMMISSION_STATUSES.DUE;
+    statement.settledAt = null;
+  }
+  await statement.save();
+
+  return { statement, created: false };
+}
+
+async function reconcileMonthlyCommissions({ now = new Date() } = {}) {
+  const paidTrips = await Trip.find({
+    paymentStatus: "PAID",
+    fare: { $ne: null },
+    driverId: { $ne: null },
+  }).sort({ paymentConfirmedAt: 1, endedAt: 1 });
+
+  const groups = new Map();
+  for (const trip of paidTrips) {
+    const { month, year } = getStatementPeriod(
+      trip.endedAt ?? trip.paymentConfirmedAt ?? trip.createdAt
+    );
+    const key = `${trip.driverId.toString()}:${year}:${month}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        driverId: trip.driverId,
+        periodMonth: month,
+        periodYear: year,
+        trips: [],
+      });
+    }
+    groups.get(key).trips.push(trip);
+  }
+
+  const statements = [];
+  let createdCount = 0;
+  let updatedCount = 0;
+  const touchedDriverIds = new Set();
+
+  for (const group of groups.values()) {
+    const result = await upsertStatementFromTrips(
+      group.driverId,
+      group.periodMonth,
+      group.periodYear,
+      group.trips
+    );
+    statements.push(result.statement);
+    createdCount += result.created ? 1 : 0;
+    updatedCount += result.created ? 0 : 1;
+    touchedDriverIds.add(group.driverId.toString());
+  }
+
+  const allDrivers = await DriverProfile.find().select("_id");
+  for (const driver of allDrivers) {
+    await recalculateDriverDebt(driver._id);
+    await evaluateDriverLifecycle(driver._id, now);
+  }
+
+  return {
+    statements,
+    createdCount,
+    updatedCount,
+    driverCount: allDrivers.length,
+    touchedDriverCount: touchedDriverIds.size,
+  };
 }
 
 async function submitReceipt(statementId, driverProfileId, fileUrl) {
@@ -220,7 +354,9 @@ async function rejectStatement(statementId, reviewerUserId, reason = "") {
 
 module.exports = {
   COMMISSION_TRANSITIONS,
+  getStatementPeriod,
   getStatementDueDate,
+  reconcileMonthlyCommissions,
   recordTripCommission,
   submitReceipt,
   approveStatement,

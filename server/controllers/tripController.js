@@ -2,15 +2,15 @@ const Booking = require("../models/Booking");
 const Trip = require("../models/Trip");
 const DriverProfile = require("../models/DriverProfile");
 const AuditLog = require("../models/AuditLog");
+const { env } = require("../config/env");
 const { asyncHandler } = require("../utils/asyncHandler");
 const { getPagination } = require("../utils/pagination");
 const { ApiError } = require("../utils/apiError");
 const { setDriverBusy, returnDriverToAvailable } = require("../services/driverStatusService");
 const { recordTripCommission } = require("../services/commissionService");
-const { BOOKING_STATUSES, DRIVER_STATUSES } = require("../constants/statuses");
+const { calculateFare } = require("../services/fareService");
+const { BOOKING_STATUSES } = require("../constants/statuses");
 const { emitDomainEvent } = require("../socket");
-
-const FARE_PER_MINUTE_GHS = 1;
 
 async function getDriverProfileForUser(userId) {
   const driver = await DriverProfile.findOne({ userId });
@@ -69,10 +69,22 @@ const endTrip = asyncHandler(async (req, res) => {
   if (!trip) throw new ApiError(404, "Trip record not found");
 
   const now = new Date();
+  const { distanceKm = null, manualFare = null, fareNotes = "" } = req.validated.body;
+  const fareResult = calculateFare({
+    durationMinutes: Math.max(1, Math.ceil((now - trip.startedAt) / 60000)),
+    distanceKm,
+    manualFare,
+    fareNotes,
+  });
+
   trip.endedAt = now;
   trip.durationMinutes = Math.max(1, Math.ceil((now - trip.startedAt) / 60000));
-  trip.fare = parseFloat((trip.durationMinutes * FARE_PER_MINUTE_GHS).toFixed(2));
-  trip.commissionAmount = parseFloat((trip.fare * 0.1).toFixed(2));
+  trip.distanceKm = distanceKm;
+  trip.fare = fareResult.fare;
+  trip.fareBreakdown = fareResult.breakdown;
+  trip.isManualFareOverride = fareResult.isManualOverride;
+  trip.fareNotes = fareResult.fareNotes;
+  trip.commissionAmount = parseFloat((trip.fare * env.COMMISSION_RATE).toFixed(2));
   await trip.save();
 
   booking.status = BOOKING_STATUSES.PAYMENT_PENDING;

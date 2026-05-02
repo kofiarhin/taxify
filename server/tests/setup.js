@@ -7,6 +7,11 @@ process.env.ASSIGNMENT_TIMEOUT_MS = "60000";
 process.env.ASSIGNMENT_SWEEP_INTERVAL_MS = "1000";
 process.env.COMMISSION_RATE = "0.1";
 process.env.COMMISSION_PAYMENT_GRACE_DAYS = "7";
+process.env.COMMISSION_SUSPEND_AFTER_DAYS = "30";
+process.env.COMMISSION_DEACTIVATE_AFTER_DAYS = "60";
+process.env.FARE_BASE = "5";
+process.env.FARE_PER_MINUTE = "1";
+process.env.FARE_PER_KM = "2";
 
 const mongoose = require("mongoose");
 const { MongoMemoryServer } = require("mongodb-memory-server");
