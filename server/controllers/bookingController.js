@@ -4,10 +4,10 @@ const { asyncHandler } = require("../utils/asyncHandler");
 const { getPagination } = require("../utils/pagination");
 const { ApiError } = require("../utils/apiError");
 const {
-  cancelActiveAssignmentForBooking,
   dispatchBooking,
   generateBookingReference,
 } = require("../services/assignmentService");
+const { cancelBooking: cancelBookingService } = require("../services/bookingCancellationService");
 const { BOOKING_STATUSES, ASSIGNMENT_MODES } = require("../constants/statuses");
 const { emitDomainEvent } = require("../socket");
 
@@ -71,35 +71,9 @@ const getQueue = asyncHandler(async (_req, res) => {
 });
 
 const cancelBooking = asyncHandler(async (req, res) => {
-  const booking = await Booking.findById(req.params.id);
-  if (!booking) throw new ApiError(404, "Booking not found");
-
-  if (booking.status === BOOKING_STATUSES.CANCELLED) {
-    return res.json({ success: true, data: { booking } });
-  }
-
-  const nonCancellable = [
-    BOOKING_STATUSES.IN_PROGRESS,
-    BOOKING_STATUSES.PAYMENT_PENDING,
-    BOOKING_STATUSES.PAID,
-    BOOKING_STATUSES.COMPLETED,
-  ];
-  if (nonCancellable.includes(booking.status)) {
-    throw new ApiError(400, `Cannot cancel a booking with status ${booking.status}`);
-  }
-
-  if (
-    booking.status === BOOKING_STATUSES.ASSIGNED ||
-    booking.status === BOOKING_STATUSES.ACCEPTED
-  ) {
-    await cancelActiveAssignmentForBooking(booking);
-  }
-
-  booking.status = BOOKING_STATUSES.CANCELLED;
-  booking.cancelledAt = new Date();
-  booking.cancelReason = req.validated.body.reason || "";
-  booking.queueEnteredAt = null;
-  await booking.save();
+  const { booking } = await cancelBookingService(req.params.id, {
+    reason: req.validated.body.reason || "",
+  });
 
   await AuditLog.create({
     actorUserId: req.user._id,

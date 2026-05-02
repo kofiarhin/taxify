@@ -5,8 +5,12 @@ const { env } = require("./config/env");
 const { seedDemoUsers } = require("./services/seedService");
 const { initializeSocket } = require("./socket");
 const { expirePendingAssignments } = require("./services/assignmentService");
+const {
+  startCommissionReconciliationSchedule,
+} = require("./jobs/commissionReconciliationJob");
 
 let assignmentSweepHandle = null;
+let commissionReconciliationHandle = null;
 
 function startAssignmentSweepJob() {
   if (env.NODE_ENV === "test") {
@@ -22,6 +26,11 @@ function startAssignmentSweepJob() {
   return assignmentSweepHandle;
 }
 
+function startCommissionReconciliationJob() {
+  commissionReconciliationHandle = startCommissionReconciliationSchedule();
+  return commissionReconciliationHandle;
+}
+
 async function startServer() {
   await connectDatabase();
 
@@ -32,6 +41,7 @@ async function startServer() {
   const server = http.createServer(app);
   initializeSocket(server);
   startAssignmentSweepJob();
+  startCommissionReconciliationJob();
 
   server.listen(env.PORT, () => {
     console.log(`Taxify API listening on port ${env.PORT}`);

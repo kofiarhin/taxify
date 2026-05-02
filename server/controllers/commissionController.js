@@ -10,6 +10,9 @@ const {
   settleStatement,
   rejectStatement,
 } = require("../services/commissionService");
+const {
+  reconcileMonthlyCommissions,
+} = require("../services/commissionReconciliationService");
 
 const listCommissions = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPagination(req.query);
@@ -118,6 +121,20 @@ const rejectReceipt = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { statement } });
 });
 
+const reconcileCommissions = asyncHandler(async (req, res) => {
+  const summary = await reconcileMonthlyCommissions();
+
+  await AuditLog.create({
+    actorUserId: req.user._id,
+    action: "COMMISSION_RECONCILED",
+    entityType: "CommissionStatement",
+    entityId: null,
+    metadata: summary,
+  });
+
+  res.json({ success: true, data: { summary } });
+});
+
 module.exports = {
   listCommissions,
   getMyCommissions,
@@ -126,4 +143,5 @@ module.exports = {
   approveReceipt,
   settleReceipt,
   rejectReceipt,
+  reconcileCommissions,
 };

@@ -448,6 +448,84 @@ describe("dispatch and operations flow", () => {
     expect(refreshedDriver.status).toBe(DRIVER_STATUSES.ACTIVE);
   });
 
+  it("reconciliation endpoint returns a production summary and does not duplicate statements", async () => {
+    const admin = await createAuthenticatedRequest(ROLES.ADMIN);
+    const agent = await createAuthenticatedRequest(ROLES.AGENT);
+    const driver = await createDriverAccount({ commissionDebt: 0 });
+    const booking = await Booking.create({
+      ...bookingPayload(),
+      bookingReference: "TXF-20260420-ADMIN",
+      createdBy: agent.user._id,
+      status: BOOKING_STATUSES.PAID,
+      assignedDriverId: driver.driverProfile._id,
+      finalFare: 100,
+      completedAt: new Date("2026-04-20T10:00:00.000Z"),
+      paidAt: new Date("2026-04-20T10:05:00.000Z"),
+    });
+    await Trip.create({
+      bookingId: booking._id,
+      driverId: driver.driverProfile._id,
+      startedAt: new Date("2026-04-20T09:30:00.000Z"),
+      endedAt: new Date("2026-04-20T10:00:00.000Z"),
+      durationMinutes: 30,
+      fare: 100,
+      commissionAmount: 10,
+      paymentStatus: "PAID",
+      paymentConfirmedAt: new Date("2026-04-20T10:05:00.000Z"),
+    });
+
+    const firstResponse = await request(app)
+      .post("/api/v1/admin/commission/reconcile")
+      .set(admin.headers)
+      .send({});
+    const secondResponse = await request(app)
+      .post("/api/v1/admin/commission/reconcile")
+      .set(admin.headers)
+      .send({});
+
+    expect(firstResponse.statusCode).toBe(200);
+    expect(firstResponse.body.data.summary).toMatchObject({
+      driversChecked: 1,
+      statementsCreated: 1,
+      driversSuspended: 0,
+      driversDeactivated: 0,
+      errors: [],
+    });
+    expect(secondResponse.body.data.summary.statementsCreated).toBe(0);
+    expect(await CommissionStatement.countDocuments({ driverId: driver.driverProfile._id })).toBe(1);
+  });
+
+  it("restores an auto-suspended driver after approved settlement clears debt", async () => {
+    const admin = await createAuthenticatedRequest(ROLES.ADMIN);
+    const driver = await createDriverAccount({ commissionDebt: 30 });
+    const statement = await CommissionStatement.create({
+      driverId: driver.driverProfile._id,
+      periodMonth: 3,
+      periodYear: 2026,
+      tripIds: [],
+      grossTripRevenue: 300,
+      commissionRate: 0.1,
+      commissionTotal: 30,
+      amountPaid: 0,
+      balanceDue: 30,
+      dueDate: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+      status: COMMISSION_STATUSES.SUBMITTED,
+    });
+
+    await syncDriverSuspension(driver.driverProfile._id, new Date());
+    expect((await DriverProfile.findById(driver.driverProfile._id)).status).toBe(DRIVER_STATUSES.SUSPENDED);
+
+    const approveResponse = await request(app)
+      .post(`/api/v1/commissions/${statement._id}/approve`)
+      .set(admin.headers)
+      .send({ settleImmediately: true });
+
+    expect(approveResponse.statusCode).toBe(200);
+    const refreshedDriver = await DriverProfile.findById(driver.driverProfile._id);
+    expect(refreshedDriver.status).toBe(DRIVER_STATUSES.ACTIVE);
+    expect(refreshedDriver.commissionDebt).toBe(0);
+  });
+
   it("cancels a queued booking idempotently", async () => {
     const agent = await createAuthenticatedRequest(ROLES.AGENT);
     const created = await createBookingVia(ROLES.AGENT);
@@ -521,6 +599,47 @@ describe("dispatch and operations flow", () => {
     expect(refreshedDriver.currentAssignmentId).toBeNull();
     expect(refreshedBooking.assignedDriverId).toBeNull();
     expect(refreshedBooking.acceptedAt).toBeNull();
+  });
+
+  it("does not reactivate a suspended driver during cancellation cleanup", async () => {
+    const agent = await createAuthenticatedRequest(ROLES.AGENT);
+    const driver = await createDriverAccount();
+    const created = await createBookingVia(ROLES.AGENT);
+    const bookingId = created.response.body.data.booking._id;
+    const attempt = await AssignmentAttempt.findOne({ bookingId, driverId: driver.driverProfile._id });
+
+    await DriverProfile.findByIdAndUpdate(driver.driverProfile._id, {
+      status: DRIVER_STATUSES.SUSPENDED,
+      suspensionReason: "Manual review",
+    });
+
+    const cancelResponse = await request(app)
+      .post(`/api/v1/bookings/${bookingId}/cancel`)
+      .set(agent.headers)
+      .send({ reason: "Customer cancelled" });
+
+    const refreshedAttempt = await AssignmentAttempt.findById(attempt._id);
+    const refreshedDriver = await DriverProfile.findById(driver.driverProfile._id);
+
+    expect(cancelResponse.statusCode).toBe(200);
+    expect(refreshedAttempt.status).toBe("CANCELLED");
+    expect(refreshedDriver.status).toBe(DRIVER_STATUSES.SUSPENDED);
+    expect(refreshedDriver.currentAssignmentId).toBeNull();
+  });
+
+  it("defensively clears stale current assignments before dispatch", async () => {
+    const driver = await createDriverAccount();
+    await DriverProfile.findByIdAndUpdate(driver.driverProfile._id, {
+      currentAssignmentId: driver.driverProfile._id,
+    });
+
+    const created = await createBookingVia(ROLES.AGENT);
+    const refreshedDriver = await DriverProfile.findById(driver.driverProfile._id);
+
+    expect(created.response.statusCode).toBe(201);
+    expect(created.response.body.data.booking.status).toBe(BOOKING_STATUSES.ASSIGNED);
+    expect(String(created.response.body.data.booking.assignedDriverId)).toBe(String(driver.driverProfile._id));
+    expect(String(refreshedDriver.currentAssignmentId)).not.toBe(String(driver.driverProfile._id));
   });
 
   it("creates complaints and allows admin status updates", async () => {

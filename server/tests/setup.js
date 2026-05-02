@@ -9,6 +9,7 @@ process.env.COMMISSION_RATE = "0.1";
 process.env.COMMISSION_PAYMENT_GRACE_DAYS = "7";
 process.env.COMMISSION_SUSPEND_AFTER_DAYS = "30";
 process.env.COMMISSION_DEACTIVATE_AFTER_DAYS = "60";
+process.env.COMMISSION_RECONCILIATION_CRON = "0 2 * * *";
 process.env.FARE_BASE = "5";
 process.env.FARE_PER_MINUTE = "1";
 process.env.FARE_PER_KM = "2";

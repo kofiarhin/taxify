@@ -9,7 +9,13 @@ const {
   ASSIGNMENT_MODES,
 } = require("../constants/statuses");
 const { ApiError } = require("../utils/apiError");
-const { evaluateDriverLifecycle, releaseDriverFromAssignment } = require("./driverStatusService");
+const {
+  evaluateDriverLifecycle,
+  getEligibleDriverQuery,
+  isDriverEligibleForDispatch,
+  releaseDriverFromAssignment,
+} = require("./lifecycleService");
+const { cancelBooking } = require("./bookingCancellationService");
 const { emitDomainEvent } = require("../socket");
 
 function generateBookingReference() {
@@ -31,19 +37,13 @@ async function dispatchBooking(bookingId, mode = ASSIGNMENT_MODES.AUTO, options 
     throw new ApiError(400, "Booking is not eligible for dispatch");
   }
 
-  const candidateDrivers = await DriverProfile.find({
-    status: DRIVER_STATUSES.ACTIVE,
-    currentAssignmentId: null,
-    ...(excludeDriverIds.length > 0 ? { _id: { $nin: excludeDriverIds } } : {}),
-  }).sort({ lastAssignedAt: 1, createdAt: 1 });
+  const candidateDrivers = await DriverProfile.find(
+    getEligibleDriverQuery(excludeDriverIds)
+  ).sort({ lastAssignedAt: 1, createdAt: 1 });
   const eligibleDrivers = [];
   for (const candidate of candidateDrivers) {
-    const evaluatedDriver = await evaluateDriverLifecycle(candidate._id);
-    if (
-      evaluatedDriver.status === DRIVER_STATUSES.ACTIVE &&
-      !evaluatedDriver.currentAssignmentId
-    ) {
-      eligibleDrivers.push(evaluatedDriver);
+    if (await isDriverEligibleForDispatch(candidate)) {
+      eligibleDrivers.push(candidate);
     }
   }
 
@@ -98,6 +98,13 @@ async function acceptAssignment(attemptId, driverProfileId) {
   if (attempt.expiresAt < new Date()) {
     await expireAssignmentAttempt(attempt, { reassign: true, excludeDriverIds: [driverProfileId] });
     throw new ApiError(400, "Assignment has expired");
+  }
+  const driver = await evaluateDriverLifecycle(driverProfileId);
+  if (
+    driver.status !== DRIVER_STATUSES.ACTIVE &&
+    driver.status !== DRIVER_STATUSES.BUSY
+  ) {
+    throw new ApiError(403, "Driver is not eligible to accept assignments");
   }
 
   attempt.status = ASSIGNMENT_STATUSES.ACCEPTED;
@@ -230,51 +237,8 @@ async function expireAssignmentAttempt(attemptOrId, options = {}) {
 }
 
 async function cancelActiveAssignmentForBooking(booking) {
-  const attempt = await AssignmentAttempt.findOne({
-    bookingId: booking._id,
-    status: { $in: [ASSIGNMENT_STATUSES.PENDING, ASSIGNMENT_STATUSES.ACCEPTED] },
-  }).sort({ createdAt: -1 });
-
-  if (!attempt) {
-    booking.assignedDriverId = null;
-    booking.acceptedAt = null;
-    await booking.save();
-    return { booking, attempt: null };
-  }
-
-  attempt.status = ASSIGNMENT_STATUSES.CANCELLED;
-  attempt.respondedAt = new Date();
-  attempt.reason = attempt.reason || "Booking cancelled";
-  await attempt.save();
-
-  const activeBookingCount = await Booking.countDocuments({
-    _id: { $ne: booking._id },
-    assignedDriverId: attempt.driverId,
-    status: {
-      $in: [
-        BOOKING_STATUSES.ASSIGNED,
-        BOOKING_STATUSES.ACCEPTED,
-        BOOKING_STATUSES.IN_PROGRESS,
-        BOOKING_STATUSES.PAYMENT_PENDING,
-      ],
-    },
-  });
-
-  if (activeBookingCount === 0) {
-    await releaseDriverFromAssignment(attempt.driverId, attempt._id);
-  }
-
-  booking.assignedDriverId = null;
-  booking.acceptedAt = null;
-  await booking.save();
-
-  emitDomainEvent("assignment.cancelled", {
-    bookingId: booking._id.toString(),
-    driverId: attempt.driverId.toString(),
-    assignmentId: attempt._id.toString(),
-  });
-
-  return { booking, attempt };
+  const { booking: cancelledBooking, attempts } = await cancelBooking(booking);
+  return { booking: cancelledBooking, attempt: attempts[0] ?? null };
 }
 
 async function expirePendingAssignments(now = new Date()) {

@@ -4,7 +4,10 @@ const Trip = require("../models/Trip");
 const { env } = require("../config/env");
 const { COMMISSION_STATUSES } = require("../constants/statuses");
 const { ApiError } = require("../utils/apiError");
-const { evaluateDriverLifecycle, syncDriverSuspension } = require("./driverStatusService");
+const { evaluateDriverLifecycle, syncDriverSuspension } = require("./lifecycleService");
+const {
+  reconcileMonthlyCommissions: reconcileCommissions,
+} = require("./commissionReconciliationService");
 const { emitDomainEvent } = require("../socket");
 
 const COMMISSION_TRANSITIONS = {
@@ -183,59 +186,12 @@ async function upsertStatementFromTrips(driverId, periodMonth, periodYear, trips
 }
 
 async function reconcileMonthlyCommissions({ now = new Date() } = {}) {
-  const paidTrips = await Trip.find({
-    paymentStatus: "PAID",
-    fare: { $ne: null },
-    driverId: { $ne: null },
-  }).sort({ paymentConfirmedAt: 1, endedAt: 1 });
-
-  const groups = new Map();
-  for (const trip of paidTrips) {
-    const { month, year } = getStatementPeriod(
-      trip.endedAt ?? trip.paymentConfirmedAt ?? trip.createdAt
-    );
-    const key = `${trip.driverId.toString()}:${year}:${month}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        driverId: trip.driverId,
-        periodMonth: month,
-        periodYear: year,
-        trips: [],
-      });
-    }
-    groups.get(key).trips.push(trip);
-  }
-
-  const statements = [];
-  let createdCount = 0;
-  let updatedCount = 0;
-  const touchedDriverIds = new Set();
-
-  for (const group of groups.values()) {
-    const result = await upsertStatementFromTrips(
-      group.driverId,
-      group.periodMonth,
-      group.periodYear,
-      group.trips
-    );
-    statements.push(result.statement);
-    createdCount += result.created ? 1 : 0;
-    updatedCount += result.created ? 0 : 1;
-    touchedDriverIds.add(group.driverId.toString());
-  }
-
-  const allDrivers = await DriverProfile.find().select("_id");
-  for (const driver of allDrivers) {
-    await recalculateDriverDebt(driver._id);
-    await evaluateDriverLifecycle(driver._id, now);
-  }
-
+  const summary = await reconcileCommissions({ now });
   return {
-    statements,
-    createdCount,
-    updatedCount,
-    driverCount: allDrivers.length,
-    touchedDriverCount: touchedDriverIds.size,
+    ...summary,
+    createdCount: summary.statementsCreated,
+    updatedCount: summary.statementsUpdated,
+    driverCount: summary.driversChecked,
   };
 }
 
