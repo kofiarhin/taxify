@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { DRIVER_STATUSES } = require("../constants/statuses");
+const { DRIVER_STATUSES, LIFECYCLE_REASONS } = require("../constants/statuses");
 
 const driverProfileSchema = new mongoose.Schema(
   {
@@ -82,6 +82,11 @@ const driverProfileSchema = new mongoose.Schema(
     deactivationReason: {
       type: String,
       default: "",
+    },
+    lifecycleReason: {
+      type: String,
+      enum: Object.values(LIFECYCLE_REASONS),
+      default: LIFECYCLE_REASONS.NONE,
     },
     currentAssignmentId: {
       type: mongoose.Schema.Types.ObjectId,

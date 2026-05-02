@@ -15,12 +15,12 @@ process.env.FARE_PER_MINUTE = "1";
 process.env.FARE_PER_KM = "2";
 
 const mongoose = require("mongoose");
-const { MongoMemoryServer } = require("mongodb-memory-server");
+const { MongoMemoryReplSet } = require("mongodb-memory-server");
 
 let mongoServer;
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
+  mongoServer = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   process.env.MONGODB_URI = mongoServer.getUri();
   await mongoose.connect(process.env.MONGODB_URI);
 });

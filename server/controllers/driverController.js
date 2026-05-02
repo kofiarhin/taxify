@@ -1,5 +1,5 @@
 const DriverProfile = require("../models/DriverProfile");
-const { DRIVER_STATUSES } = require("../constants/statuses");
+const { DRIVER_STATUSES, LIFECYCLE_REASONS } = require("../constants/statuses");
 const { ApiError } = require("../utils/apiError");
 const { asyncHandler } = require("../utils/asyncHandler");
 const { registerDriver, getPendingDrivers, updateDriverStatus } = require("../services/userService");
@@ -31,6 +31,7 @@ const approve = asyncHandler(async (req, res) => {
     status: DRIVER_STATUSES.ACTIVE,
     approvedBy: req.user._id,
     approvedAt: new Date(),
+    lifecycleReason: LIFECYCLE_REASONS.NONE,
   });
 
   res.json({
@@ -44,6 +45,7 @@ const suspend = asyncHandler(async (req, res) => {
     status: DRIVER_STATUSES.SUSPENDED,
     suspendedAt: new Date(),
     suspensionReason: req.validated.body.reason || "",
+    lifecycleReason: LIFECYCLE_REASONS.MANUAL,
   });
 
   res.json({
@@ -57,6 +59,7 @@ const reactivate = asyncHandler(async (req, res) => {
     status: DRIVER_STATUSES.ACTIVE,
     suspendedAt: null,
     suspensionReason: "",
+    lifecycleReason: LIFECYCLE_REASONS.NONE,
   });
 
   res.json({
@@ -86,6 +89,7 @@ const deactivate = asyncHandler(async (req, res) => {
     status: DRIVER_STATUSES.DEACTIVATED,
     deactivatedAt: new Date(),
     deactivationReason: req.validated.body.reason || "",
+    lifecycleReason: LIFECYCLE_REASONS.MANUAL,
   });
 
   res.json({

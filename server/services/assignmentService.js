@@ -56,7 +56,15 @@ async function dispatchBooking(bookingId, mode = ASSIGNMENT_MODES.AUTO, options 
     return { queued: true, booking };
   }
 
-  const driver = eligibleDrivers[0];
+  const driver = await evaluateDriverLifecycle(eligibleDrivers[0]._id, {
+    now: options.now ?? new Date(),
+  });
+  if (!(await isDriverEligibleForDispatch(driver, { now: options.now ?? new Date() }))) {
+    return dispatchBooking(booking._id, mode, {
+      ...options,
+      excludeDriverIds: [...excludeDriverIds, driver._id],
+    });
+  }
   const attemptNumber =
     (await AssignmentAttempt.countDocuments({ bookingId: booking._id })) + 1;
 

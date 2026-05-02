@@ -4,9 +4,11 @@ const Complaint = require("../models/Complaint");
 const AssignmentAttempt = require("../models/AssignmentAttempt");
 const CommissionStatement = require("../models/CommissionStatement");
 const DriverProfile = require("../models/DriverProfile");
+const { cancelBooking: cancelBookingService } = require("../services/bookingCancellationService");
 const { expirePendingAssignments } = require("../services/assignmentService");
 const { syncDriverSuspension } = require("../services/driverStatusService");
 const { reconcileMonthlyCommissions } = require("../services/commissionService");
+const { getDriverLifecycleState } = require("../services/lifecycleService");
 const {
   app,
   request,
@@ -19,6 +21,7 @@ const {
   BOOKING_STATUSES,
   DRIVER_STATUSES,
   COMMISSION_STATUSES,
+  LIFECYCLE_REASONS,
 } = require("../constants/statuses");
 
 function bookingPayload(overrides = {}) {
@@ -526,6 +529,50 @@ describe("dispatch and operations flow", () => {
     expect(refreshedDriver.commissionDebt).toBe(0);
   });
 
+  it("does not auto-reactivate a manually suspended driver after debt clears", async () => {
+    const driver = await createDriverAccount({
+      status: DRIVER_STATUSES.SUSPENDED,
+      lifecycleReason: LIFECYCLE_REASONS.MANUAL,
+      suspensionReason: "Manual review",
+      suspendedAt: new Date(),
+      commissionDebt: 0,
+    });
+
+    await syncDriverSuspension(driver.driverProfile._id, new Date());
+
+    const refreshedDriver = await DriverProfile.findById(driver.driverProfile._id);
+    expect(refreshedDriver.status).toBe(DRIVER_STATUSES.SUSPENDED);
+    expect(refreshedDriver.lifecycleReason).toBe(LIFECYCLE_REASONS.MANUAL);
+  });
+
+  it("does not auto-reactivate a manually deactivated driver after debt clears", async () => {
+    const driver = await createDriverAccount({
+      status: DRIVER_STATUSES.DEACTIVATED,
+      lifecycleReason: LIFECYCLE_REASONS.MANUAL,
+      deactivationReason: "Manual offboarding",
+      deactivatedAt: new Date(),
+      commissionDebt: 0,
+    });
+
+    await syncDriverSuspension(driver.driverProfile._id, new Date());
+
+    const refreshedDriver = await DriverProfile.findById(driver.driverProfile._id);
+    expect(refreshedDriver.status).toBe(DRIVER_STATUSES.DEACTIVATED);
+    expect(refreshedDriver.lifecycleReason).toBe(LIFECYCLE_REASONS.MANUAL);
+  });
+
+  it("does not activate a pending approval driver from commission cleanup", async () => {
+    const driver = await createDriverAccount({
+      status: DRIVER_STATUSES.PENDING_APPROVAL,
+      commissionDebt: 0,
+    });
+
+    await syncDriverSuspension(driver.driverProfile._id, new Date());
+
+    const refreshedDriver = await DriverProfile.findById(driver.driverProfile._id);
+    expect(refreshedDriver.status).toBe(DRIVER_STATUSES.PENDING_APPROVAL);
+  });
+
   it("cancels a queued booking idempotently", async () => {
     const agent = await createAuthenticatedRequest(ROLES.AGENT);
     const created = await createBookingVia(ROLES.AGENT);
@@ -625,6 +672,170 @@ describe("dispatch and operations flow", () => {
     expect(refreshedAttempt.status).toBe("CANCELLED");
     expect(refreshedDriver.status).toBe(DRIVER_STATUSES.SUSPENDED);
     expect(refreshedDriver.currentAssignmentId).toBeNull();
+  });
+
+  it("does not reactivate a deactivated driver during cancellation cleanup", async () => {
+    const agent = await createAuthenticatedRequest(ROLES.AGENT);
+    const driver = await createDriverAccount();
+    const created = await createBookingVia(ROLES.AGENT);
+    const bookingId = created.response.body.data.booking._id;
+    const attempt = await AssignmentAttempt.findOne({ bookingId, driverId: driver.driverProfile._id });
+
+    await DriverProfile.findByIdAndUpdate(driver.driverProfile._id, {
+      status: DRIVER_STATUSES.DEACTIVATED,
+      lifecycleReason: LIFECYCLE_REASONS.MANUAL,
+      deactivationReason: "Manual offboarding",
+    });
+
+    const cancelResponse = await request(app)
+      .post(`/api/v1/bookings/${bookingId}/cancel`)
+      .set(agent.headers)
+      .send({ reason: "Customer cancelled" });
+
+    const refreshedAttempt = await AssignmentAttempt.findById(attempt._id);
+    const refreshedDriver = await DriverProfile.findById(driver.driverProfile._id);
+
+    expect(cancelResponse.statusCode).toBe(200);
+    expect(refreshedAttempt.status).toBe("CANCELLED");
+    expect(refreshedDriver.status).toBe(DRIVER_STATUSES.DEACTIVATED);
+    expect(refreshedDriver.currentAssignmentId).toBeNull();
+  });
+
+  it("rolls back cancellation cleanup when a transaction-supported cancellation fails", async () => {
+    const driver = await createDriverAccount();
+    const created = await createBookingVia(ROLES.AGENT);
+    const bookingId = created.response.body.data.booking._id;
+    const attempt = await AssignmentAttempt.findOne({ bookingId, driverId: driver.driverProfile._id });
+    const originalSave = Booking.prototype.save;
+
+    jest.spyOn(Booking.prototype, "save").mockImplementation(function mockedSave(...args) {
+      if (this.status === BOOKING_STATUSES.CANCELLED) {
+        throw new Error("forced cancellation failure");
+      }
+      return originalSave.apply(this, args);
+    });
+
+    await expect(
+      cancelBookingService(bookingId, { reason: "Customer cancelled" })
+    ).rejects.toThrow("forced cancellation failure");
+
+    const refreshedAttempt = await AssignmentAttempt.findById(attempt._id);
+    const refreshedDriver = await DriverProfile.findById(driver.driverProfile._id);
+    const refreshedBooking = await Booking.findById(bookingId);
+
+    expect(refreshedAttempt.status).toBe("PENDING");
+    expect(String(refreshedDriver.currentAssignmentId)).toBe(String(attempt._id));
+    expect(refreshedBooking.status).toBe(BOOKING_STATUSES.ASSIGNED);
+    expect(String(refreshedBooking.assignedDriverId)).toBe(String(driver.driverProfile._id));
+  });
+
+  it("evaluates overdue drivers immediately before dispatch and assigns an eligible active driver", async () => {
+    const overdueDriver = await createDriverAccount({
+      vehiclePlate: "TX-ODUE",
+      commissionDebt: 30,
+    });
+    const activeDriver = await createDriverAccount({ vehiclePlate: "TX-ACTV" });
+    await CommissionStatement.create({
+      driverId: overdueDriver.driverProfile._id,
+      periodMonth: 3,
+      periodYear: 2026,
+      tripIds: [],
+      grossTripRevenue: 300,
+      commissionRate: 0.1,
+      commissionTotal: 30,
+      amountPaid: 0,
+      balanceDue: 30,
+      dueDate: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+      status: COMMISSION_STATUSES.DUE,
+    });
+
+    const created = await createBookingVia(ROLES.AGENT);
+    const refreshedOverdueDriver = await DriverProfile.findById(overdueDriver.driverProfile._id);
+
+    expect(created.response.statusCode).toBe(201);
+    expect(created.response.body.data.booking.status).toBe(BOOKING_STATUSES.ASSIGNED);
+    expect(String(created.response.body.data.booking.assignedDriverId)).toBe(String(activeDriver.driverProfile._id));
+    expect(refreshedOverdueDriver.status).toBe(DRIVER_STATUSES.SUSPENDED);
+  });
+
+  it("deactivates and skips a long-overdue driver at dispatch time", async () => {
+    const overdueDriver = await createDriverAccount({
+      vehiclePlate: "TX-LATE",
+      commissionDebt: 60,
+    });
+    const activeDriver = await createDriverAccount({ vehiclePlate: "TX-OKAY" });
+    await CommissionStatement.create({
+      driverId: overdueDriver.driverProfile._id,
+      periodMonth: 1,
+      periodYear: 2026,
+      tripIds: [],
+      grossTripRevenue: 600,
+      commissionRate: 0.1,
+      commissionTotal: 60,
+      amountPaid: 0,
+      balanceDue: 60,
+      dueDate: new Date(Date.now() - 61 * 24 * 60 * 60 * 1000),
+      status: COMMISSION_STATUSES.DUE,
+    });
+
+    const created = await createBookingVia(ROLES.AGENT);
+    const refreshedOverdueDriver = await DriverProfile.findById(overdueDriver.driverProfile._id);
+
+    expect(created.response.statusCode).toBe(201);
+    expect(created.response.body.data.booking.status).toBe(BOOKING_STATUSES.ASSIGNED);
+    expect(String(created.response.body.data.booking.assignedDriverId)).toBe(String(activeDriver.driverProfile._id));
+    expect(refreshedOverdueDriver.status).toBe(DRIVER_STATUSES.DEACTIVATED);
+  });
+
+  it("returns pure lifecycle decisions for active, suspended, deactivated, and manual cases", () => {
+    const baseDriver = {
+      status: DRIVER_STATUSES.ACTIVE,
+      lifecycleReason: LIFECYCLE_REASONS.NONE,
+      suspensionReason: "",
+      deactivationReason: "",
+    };
+
+    expect(
+      getDriverLifecycleState(baseDriver, {
+        hasSuspendLevelDebt: false,
+        hasDeactivateLevelDebt: false,
+      }).status
+    ).toBe(DRIVER_STATUSES.ACTIVE);
+
+    expect(
+      getDriverLifecycleState(baseDriver, {
+        hasSuspendLevelDebt: true,
+        hasDeactivateLevelDebt: false,
+      })
+    ).toMatchObject({
+      status: DRIVER_STATUSES.SUSPENDED,
+      lifecycleReason: LIFECYCLE_REASONS.COMMISSION_OVERDUE,
+    });
+
+    expect(
+      getDriverLifecycleState(baseDriver, {
+        hasSuspendLevelDebt: true,
+        hasDeactivateLevelDebt: true,
+      })
+    ).toMatchObject({
+      status: DRIVER_STATUSES.DEACTIVATED,
+      lifecycleReason: LIFECYCLE_REASONS.COMMISSION_LONG_OVERDUE,
+    });
+
+    expect(
+      getDriverLifecycleState(
+        {
+          ...baseDriver,
+          status: DRIVER_STATUSES.SUSPENDED,
+          lifecycleReason: LIFECYCLE_REASONS.MANUAL,
+          suspensionReason: "Manual review",
+        },
+        { hasSuspendLevelDebt: false, hasDeactivateLevelDebt: false }
+      )
+    ).toMatchObject({
+      status: DRIVER_STATUSES.SUSPENDED,
+      lifecycleReason: LIFECYCLE_REASONS.MANUAL,
+    });
   });
 
   it("defensively clears stale current assignments before dispatch", async () => {

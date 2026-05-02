@@ -1,17 +1,18 @@
 const Booking = require("../models/Booking");
-const CommissionStatement = require("../models/CommissionStatement");
+const AssignmentAttempt = require("../models/AssignmentAttempt");
 const DriverProfile = require("../models/DriverProfile");
 const { env } = require("../config/env");
 const {
+  ASSIGNMENT_STATUSES,
   BOOKING_STATUSES,
-  COMMISSION_STATUSES,
   DRIVER_STATUSES,
+  LIFECYCLE_REASONS,
 } = require("../constants/statuses");
 const { ApiError } = require("../utils/apiError");
+const { getDriverCommissionDebtState } = require("./commissionDebtService");
 
 const AUTO_SUSPENSION_REASON = "Overdue commission payment";
 const AUTO_DEACTIVATION_REASON = "Long-term overdue commission payment";
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const ACTIVE_BOOKING_STATUSES = [
   BOOKING_STATUSES.ASSIGNED,
@@ -20,60 +21,47 @@ const ACTIVE_BOOKING_STATUSES = [
   BOOKING_STATUSES.PAYMENT_PENDING,
 ];
 
-const UNPAID_COMMISSION_STATUSES = [
-  COMMISSION_STATUSES.DUE,
-  COMMISSION_STATUSES.SUBMITTED,
-  COMMISSION_STATUSES.APPROVED,
-  COMMISSION_STATUSES.REJECTED,
+const ACTIVE_ASSIGNMENT_STATUSES = [
+  ASSIGNMENT_STATUSES.PENDING,
+  ASSIGNMENT_STATUSES.ACCEPTED,
 ];
 
-function getDaysOverdue(dueDate, now) {
-  return Math.floor((now.getTime() - dueDate.getTime()) / DAY_MS);
-}
+const UNPAID_COMMISSION_STATUSES = require("./commissionDebtService")
+  .OUTSTANDING_COMMISSION_STATUSES;
 
-function isAutoSuspended(driver) {
+function isCommissionSuspended(driver) {
   return (
     driver.status === DRIVER_STATUSES.SUSPENDED &&
-    driver.suspensionReason === AUTO_SUSPENSION_REASON
+    (driver.lifecycleReason === LIFECYCLE_REASONS.COMMISSION_OVERDUE ||
+      driver.suspensionReason === AUTO_SUSPENSION_REASON)
   );
 }
 
-function isAutoDeactivated(driver) {
+function isCommissionDeactivated(driver) {
   return (
     driver.status === DRIVER_STATUSES.DEACTIVATED &&
-    driver.deactivationReason === AUTO_DEACTIVATION_REASON
+    (driver.lifecycleReason === LIFECYCLE_REASONS.COMMISSION_LONG_OVERDUE ||
+      driver.deactivationReason === AUTO_DEACTIVATION_REASON)
   );
+}
+
+function isManualLifecycleBlock(driver) {
+  if (driver.status === DRIVER_STATUSES.PENDING_APPROVAL) return true;
+  if (driver.status === DRIVER_STATUSES.SUSPENDED && !isCommissionSuspended(driver)) {
+    return true;
+  }
+  if (driver.status === DRIVER_STATUSES.DEACTIVATED && !isCommissionDeactivated(driver)) {
+    return true;
+  }
+  return false;
 }
 
 function getEligibleDriverQuery(excludeDriverIds = []) {
   return {
     status: DRIVER_STATUSES.ACTIVE,
+    lifecycleReason: { $in: [null, LIFECYCLE_REASONS.NONE] },
     ...(excludeDriverIds.length > 0 ? { _id: { $nin: excludeDriverIds } } : {}),
   };
-}
-
-async function hasOtherActiveBooking(driverId, excludedBookingId = null) {
-  return Boolean(
-    await Booking.exists({
-      ...(excludedBookingId ? { _id: { $ne: excludedBookingId } } : {}),
-      assignedDriverId: driverId,
-      status: { $in: ACTIVE_BOOKING_STATUSES },
-    })
-  );
-}
-
-async function clearStaleCurrentAssignment(driver) {
-  if (!driver.currentAssignmentId) {
-    return driver;
-  }
-
-  const hasActiveBooking = await hasOtherActiveBooking(driver._id);
-  if (!hasActiveBooking) {
-    driver.currentAssignmentId = null;
-    await driver.save();
-  }
-
-  return driver;
 }
 
 function normalizeLifecycleOptions(options = {}) {
@@ -83,74 +71,193 @@ function normalizeLifecycleOptions(options = {}) {
   return options;
 }
 
-async function applyCommissionLifecycleRules(driver, options = {}) {
-  const normalizedOptions = normalizeLifecycleOptions(options);
-  const now = normalizedOptions.now ?? new Date();
+function getLifecycleConfig(options = {}) {
+  return {
+    now: options.now ?? new Date(),
+    suspendAfterDays:
+      options.suspendAfterDays ?? env.COMMISSION_SUSPEND_AFTER_DAYS,
+    deactivateAfterDays:
+      options.deactivateAfterDays ?? env.COMMISSION_DEACTIVATE_AFTER_DAYS,
+  };
+}
 
-  if (!driver) {
-    throw new ApiError(404, "Driver profile not found");
+function getDriverLifecycleState(driver, commissionSummary, config = {}) {
+  const now = config.now ?? new Date();
+
+  if (isManualLifecycleBlock(driver)) {
+    return {
+      status: driver.status,
+      lifecycleReason:
+        driver.lifecycleReason && driver.lifecycleReason !== LIFECYCLE_REASONS.NONE
+          ? driver.lifecycleReason
+          : LIFECYCLE_REASONS.MANUAL,
+      clearAssignment: driver.status === DRIVER_STATUSES.DEACTIVATED,
+      restoreAvailability: false,
+      suspensionReason: driver.suspensionReason ?? "",
+      deactivationReason: driver.deactivationReason ?? "",
+    };
   }
 
-  if (driver.status === DRIVER_STATUSES.DEACTIVATED && !isAutoDeactivated(driver)) {
+  if (commissionSummary.hasDeactivateLevelDebt) {
+    return {
+      status: DRIVER_STATUSES.DEACTIVATED,
+      lifecycleReason: LIFECYCLE_REASONS.COMMISSION_LONG_OVERDUE,
+      clearAssignment: true,
+      restoreAvailability: false,
+      deactivatedAt: driver.deactivatedAt ?? now,
+      deactivationReason: AUTO_DEACTIVATION_REASON,
+      suspendedAt: driver.suspendedAt ?? null,
+      suspensionReason: driver.suspensionReason ?? "",
+    };
+  }
+
+  if (commissionSummary.hasSuspendLevelDebt) {
+    return {
+      status: DRIVER_STATUSES.SUSPENDED,
+      lifecycleReason: LIFECYCLE_REASONS.COMMISSION_OVERDUE,
+      clearAssignment: false,
+      restoreAvailability: false,
+      suspendedAt: driver.suspendedAt ?? now,
+      suspensionReason: AUTO_SUSPENSION_REASON,
+      deactivatedAt: driver.deactivatedAt ?? null,
+      deactivationReason: driver.deactivationReason ?? "",
+    };
+  }
+
+  if (isCommissionSuspended(driver) || isCommissionDeactivated(driver)) {
+    return {
+      status: DRIVER_STATUSES.ACTIVE,
+      lifecycleReason: LIFECYCLE_REASONS.NONE,
+      clearAssignment: false,
+      restoreAvailability: true,
+      suspendedAt: null,
+      suspensionReason: "",
+      deactivatedAt: null,
+      deactivationReason: "",
+    };
+  }
+
+  return {
+    status: driver.status,
+    lifecycleReason: driver.lifecycleReason ?? LIFECYCLE_REASONS.NONE,
+    clearAssignment: false,
+    restoreAvailability: false,
+    suspendedAt: driver.suspendedAt ?? null,
+    suspensionReason: driver.suspensionReason ?? "",
+    deactivatedAt: driver.deactivatedAt ?? null,
+    deactivationReason: driver.deactivationReason ?? "",
+  };
+}
+
+async function hasOtherActiveBooking(driverId, excludedBookingId = null, options = {}) {
+  const query = Booking.exists({
+    ...(excludedBookingId ? { _id: { $ne: excludedBookingId } } : {}),
+    assignedDriverId: driverId,
+    status: { $in: ACTIVE_BOOKING_STATUSES },
+  });
+  if (options.session) query.session(options.session);
+  return Boolean(await query);
+}
+
+async function hasActiveAssignment(driverId, excludedAssignmentId = null, options = {}) {
+  const query = AssignmentAttempt.exists({
+    ...(excludedAssignmentId ? { _id: { $ne: excludedAssignmentId } } : {}),
+    driverId,
+    status: { $in: ACTIVE_ASSIGNMENT_STATUSES },
+  });
+  if (options.session) query.session(options.session);
+  return Boolean(await query);
+}
+
+async function canRestoreDriverAvailability(driver, options = {}) {
+  if (
+    driver.status === DRIVER_STATUSES.SUSPENDED ||
+    driver.status === DRIVER_STATUSES.DEACTIVATED ||
+    isManualLifecycleBlock(driver)
+  ) {
+    return false;
+  }
+
+  const [hasBooking, hasAssignment] = await Promise.all([
+    hasOtherActiveBooking(driver._id, options.excludedBookingId, options),
+    hasActiveAssignment(driver._id, options.excludedAssignmentId, options),
+  ]);
+
+  return !hasBooking && !hasAssignment;
+}
+
+async function clearStaleCurrentAssignment(driver, options = {}) {
+  if (!driver.currentAssignmentId) {
     return driver;
   }
 
-  const overdueStatement = await CommissionStatement.findOne({
-    driverId: driver._id,
-    status: { $in: UNPAID_COMMISSION_STATUSES },
-    balanceDue: { $gt: 0 },
-    dueDate: { $lte: now },
-  })
-    .sort({ dueDate: 1 })
-    .lean();
+  const [hasBooking, hasAssignment] = await Promise.all([
+    hasOtherActiveBooking(driver._id, null, options),
+    hasActiveAssignment(driver._id, driver.currentAssignmentId, options),
+  ]);
 
-  if (overdueStatement) {
-    const daysOverdue = getDaysOverdue(overdueStatement.dueDate, now);
-
-    if (daysOverdue >= env.COMMISSION_DEACTIVATE_AFTER_DAYS) {
-      driver.status = DRIVER_STATUSES.DEACTIVATED;
-      driver.deactivatedAt = driver.deactivatedAt ?? now;
-      driver.deactivationReason = AUTO_DEACTIVATION_REASON;
-      driver.currentAssignmentId = null;
-      await driver.save();
-      return driver;
-    }
-
-    if (daysOverdue >= env.COMMISSION_SUSPEND_AFTER_DAYS) {
-      driver.status = DRIVER_STATUSES.SUSPENDED;
-      driver.suspendedAt = driver.suspendedAt ?? now;
-      driver.suspensionReason = AUTO_SUSPENSION_REASON;
-      await driver.save();
-      return driver;
-    }
-  }
-
-  if (isAutoSuspended(driver) || isAutoDeactivated(driver)) {
-    driver.status = DRIVER_STATUSES.ACTIVE;
-    driver.suspendedAt = null;
-    driver.suspensionReason = "";
-    if (isAutoDeactivated(driver)) {
-      driver.deactivatedAt = null;
-      driver.deactivationReason = "";
-    }
-    await driver.save();
+  if (!hasBooking && !hasAssignment) {
+    driver.currentAssignmentId = null;
+    await driver.save({ session: options.session });
   }
 
   return driver;
 }
 
+function applyLifecycleStateToDriver(driver, state) {
+  driver.status = state.status;
+  driver.lifecycleReason = state.lifecycleReason;
+
+  if (state.suspendedAt !== undefined) driver.suspendedAt = state.suspendedAt;
+  if (state.suspensionReason !== undefined) {
+    driver.suspensionReason = state.suspensionReason;
+  }
+  if (state.deactivatedAt !== undefined) driver.deactivatedAt = state.deactivatedAt;
+  if (state.deactivationReason !== undefined) {
+    driver.deactivationReason = state.deactivationReason;
+  }
+  if (state.clearAssignment) {
+    driver.currentAssignmentId = null;
+  }
+}
+
+async function applyCommissionLifecycleRules(driver, options = {}) {
+  const normalizedOptions = normalizeLifecycleOptions(options);
+  const config = getLifecycleConfig(normalizedOptions);
+
+  if (!driver) {
+    throw new ApiError(404, "Driver profile not found");
+  }
+
+  const commissionSummary =
+    normalizedOptions.commissionSummary ??
+    (await getDriverCommissionDebtState(driver._id, {
+      ...config,
+      session: normalizedOptions.session,
+    }));
+  const nextState = getDriverLifecycleState(driver, commissionSummary, config);
+
+  applyLifecycleStateToDriver(driver, nextState);
+  await driver.save({ session: normalizedOptions.session });
+  return driver;
+}
+
 async function evaluateDriverLifecycle(driverId, options = {}) {
   const normalizedOptions = normalizeLifecycleOptions(options);
-  const driver = await DriverProfile.findById(driverId);
+  const query = DriverProfile.findById(driverId);
+  if (normalizedOptions.session) query.session(normalizedOptions.session);
+  const driver = await query;
   if (!driver) throw new ApiError(404, "Driver profile not found");
 
   await applyCommissionLifecycleRules(driver, normalizedOptions);
-  return clearStaleCurrentAssignment(driver);
+  return clearStaleCurrentAssignment(driver, normalizedOptions);
 }
 
 async function evaluateAllDriverLifecycles(options = {}) {
   const normalizedOptions = normalizeLifecycleOptions(options);
-  const drivers = await DriverProfile.find();
+  const query = DriverProfile.find();
+  if (normalizedOptions.session) query.session(normalizedOptions.session);
+  const drivers = await query;
   const summary = {
     driversChecked: drivers.length,
     driversSuspended: 0,
@@ -174,7 +281,7 @@ async function evaluateAllDriverLifecycles(options = {}) {
       ) {
         summary.driversDeactivated += 1;
       }
-      await clearStaleCurrentAssignment(evaluated);
+      await clearStaleCurrentAssignment(evaluated, normalizedOptions);
     } catch (error) {
       summary.errors.push({ driverId: driver._id.toString(), message: error.message });
     }
@@ -191,11 +298,20 @@ async function isDriverEligibleForDispatch(driver, options = {}) {
     return false;
   }
 
+  if (evaluated.lifecycleReason && evaluated.lifecycleReason !== LIFECYCLE_REASONS.NONE) {
+    return false;
+  }
+
   if (evaluated.currentAssignmentId) {
     return false;
   }
 
-  return !(await hasOtherActiveBooking(evaluated._id));
+  const [hasBooking, hasAssignment] = await Promise.all([
+    hasOtherActiveBooking(evaluated._id, null, normalizedOptions),
+    hasActiveAssignment(evaluated._id, null, normalizedOptions),
+  ]);
+
+  return !hasBooking && !hasAssignment;
 }
 
 async function setDriverBusy(driverProfileId) {
@@ -210,11 +326,9 @@ async function returnDriverToAvailable(driverProfileId) {
   const driver = await DriverProfile.findById(driverProfileId);
   if (!driver) throw new ApiError(404, "Driver profile not found");
 
-  if (
-    driver.status !== DRIVER_STATUSES.SUSPENDED &&
-    driver.status !== DRIVER_STATUSES.DEACTIVATED
-  ) {
+  if (!isManualLifecycleBlock(driver)) {
     driver.status = DRIVER_STATUSES.ACTIVE;
+    driver.lifecycleReason = driver.lifecycleReason ?? LIFECYCLE_REASONS.NONE;
   }
   driver.currentAssignmentId = null;
   driver.lastAssignedAt = new Date();
@@ -224,7 +338,9 @@ async function returnDriverToAvailable(driverProfileId) {
 
 async function releaseDriverFromAssignment(driverProfileId, assignmentId = null, options = {}) {
   const normalizedOptions = normalizeLifecycleOptions(options);
-  const driver = await DriverProfile.findById(driverProfileId);
+  const query = DriverProfile.findById(driverProfileId);
+  if (normalizedOptions.session) query.session(normalizedOptions.session);
+  const driver = await query;
   if (!driver) throw new ApiError(404, "Driver profile not found");
 
   if (
@@ -237,13 +353,15 @@ async function releaseDriverFromAssignment(driverProfileId, assignmentId = null,
 
   driver.currentAssignmentId = null;
   if (
-    driver.status !== DRIVER_STATUSES.SUSPENDED &&
-    driver.status !== DRIVER_STATUSES.DEACTIVATED &&
-    !(await hasOtherActiveBooking(driver._id, normalizedOptions.excludedBookingId))
+    await canRestoreDriverAvailability(driver, {
+      ...normalizedOptions,
+      excludedAssignmentId: assignmentId,
+    })
   ) {
     driver.status = DRIVER_STATUSES.ACTIVE;
+    driver.lifecycleReason = driver.lifecycleReason ?? LIFECYCLE_REASONS.NONE;
   }
-  await driver.save();
+  await driver.save({ session: normalizedOptions.session });
   return evaluateDriverLifecycle(driver._id, normalizedOptions);
 }
 
@@ -254,15 +372,19 @@ async function clearDriverAssignment(driverProfileId) {
 }
 
 module.exports = {
+  ACTIVE_ASSIGNMENT_STATUSES,
   ACTIVE_BOOKING_STATUSES,
   AUTO_DEACTIVATION_REASON,
   AUTO_SUSPENSION_REASON,
   UNPAID_COMMISSION_STATUSES,
   applyCommissionLifecycleRules,
+  canRestoreDriverAvailability,
   clearDriverAssignment,
   evaluateAllDriverLifecycles,
   evaluateDriverLifecycle,
+  getDriverLifecycleState,
   getEligibleDriverQuery,
+  hasActiveAssignment,
   hasOtherActiveBooking,
   isDriverEligibleForDispatch,
   normalizeLifecycleOptions,

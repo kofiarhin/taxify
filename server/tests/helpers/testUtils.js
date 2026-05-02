@@ -46,6 +46,11 @@ async function createDriverAccount(options = {}) {
     emergencyContact: options.emergencyContact ?? "+1 (646) 552-9917",
     commissionDebt: options.commissionDebt ?? 0,
     lastAssignedAt: options.lastAssignedAt ?? null,
+    lifecycleReason: options.lifecycleReason,
+    suspensionReason: options.suspensionReason,
+    deactivationReason: options.deactivationReason,
+    suspendedAt: options.suspendedAt,
+    deactivatedAt: options.deactivatedAt,
   });
 
   return { user, driverProfile };
