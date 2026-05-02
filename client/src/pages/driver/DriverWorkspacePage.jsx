@@ -5,9 +5,19 @@ import {
   useAcceptAssignmentMutation,
   useRejectAssignmentMutation,
 } from "../../hooks/mutations/useTripMutations";
+import { useMyDriverProfileQuery } from "../../hooks/queries/useDriverQueries";
 import { useMyAssignmentQuery } from "../../hooks/queries/useTripQueries";
 
-const ACTIVE_TRIP_STATUSES = ["ACCEPTED", "IN_PROGRESS", "PAYMENT_PENDING"];
+const ACTIVE_TRIP_STATUSES = [
+  "ACCEPTED",
+  "DRIVER_ACCEPTED",
+  "IN_PROGRESS",
+  "TRIP_IN_PROGRESS",
+  "TRIP_ENDED",
+  "PAYMENT_PENDING",
+  "AWAITING_CLIENT_CONFIRMATION",
+  "AWAITING_DRIVER_PAYMENT_CONFIRMATION",
+];
 
 function InfoRow({ label, value }) {
   return (
@@ -18,14 +28,43 @@ function InfoRow({ label, value }) {
   );
 }
 
-function NoAssignment() {
+function DriverRatingSummary({ driver }) {
+  const reviewCount = driver?.reviewCount ?? 0;
+  const averageRating = driver?.averageRating ?? 0;
+
   return (
-    <div className="rounded-3xl border border-white/8 bg-white/3 p-8 text-center">
-      <div className="mx-auto mb-4 h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_8px_rgba(16,185,129,0.1)]" />
-      <p className="text-lg text-white">Available for dispatch</p>
-      <p className="mt-2 text-sm text-zinc-500">
-        You will see a new booking here when dispatch assigns one to you.
-      </p>
+    <div className="rounded-3xl border border-white/8 bg-white/3 p-6">
+      <p className="text-xs uppercase tracking-widest text-zinc-500">Driver rating</p>
+      {reviewCount > 0 ? (
+        <div className="mt-3 flex items-end justify-between gap-4">
+          <div>
+            <p className="font-mono text-4xl tracking-tight text-white">
+              {Number(averageRating).toFixed(1)}
+            </p>
+            <p className="mt-1 text-sm text-zinc-500">out of 5</p>
+          </div>
+          <p className="text-right text-sm text-zinc-400">
+            {reviewCount} {reviewCount === 1 ? "review" : "reviews"}
+          </p>
+        </div>
+      ) : (
+        <p className="mt-3 text-lg text-white">No reviews yet</p>
+      )}
+    </div>
+  );
+}
+
+function NoAssignment({ driver }) {
+  return (
+    <div className="grid gap-5 md:grid-cols-[1fr_0.7fr]">
+      <div className="rounded-3xl border border-white/8 bg-white/3 p-8 text-center">
+        <div className="mx-auto mb-4 h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_8px_rgba(16,185,129,0.1)]" />
+        <p className="text-lg text-white">Available for dispatch</p>
+        <p className="mt-2 text-sm text-zinc-500">
+          You will see a new booking here when dispatch assigns one to you.
+        </p>
+      </div>
+      <DriverRatingSummary driver={driver} />
     </div>
   );
 }
@@ -35,6 +74,7 @@ export function DriverWorkspacePage() {
   const [rejectReason, setRejectReason] = useState("");
 
   const { data, isLoading, isError } = useMyAssignmentQuery();
+  const { data: driverProfile } = useMyDriverProfileQuery();
   const acceptMut = useAcceptAssignmentMutation();
   const rejectMut = useRejectAssignmentMutation();
 
@@ -67,9 +107,9 @@ export function DriverWorkspacePage() {
 
   return (
     <AppShell eyebrow="Driver workspace" title="Drive.">
-      {!booking && <NoAssignment />}
+      {!booking && <NoAssignment driver={driverProfile} />}
 
-      {booking?.status === "ASSIGNED" && attempt && (
+      {["ASSIGNED", "DRIVER_ASSIGNED"].includes(booking?.status) && attempt && (
         <div className="space-y-6">
           <div className="rounded-3xl border border-white/8 bg-white/3 p-6">
             <p className="mb-4 text-xs uppercase tracking-widest text-zinc-500">New job assigned</p>

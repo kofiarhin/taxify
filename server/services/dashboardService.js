@@ -37,7 +37,7 @@ async function getSummary() {
     acceptanceStats,
   ] = await Promise.all([
     Booking.countDocuments({ createdAt: { $gte: today, $lte: todayEnd } }),
-    Booking.countDocuments({ status: BOOKING_STATUSES.IN_PROGRESS }),
+    Booking.countDocuments({ status: { $in: [BOOKING_STATUSES.IN_PROGRESS, BOOKING_STATUSES.TRIP_IN_PROGRESS] } }),
     Booking.countDocuments({
       status: { $in: [BOOKING_STATUSES.PAID, BOOKING_STATUSES.COMPLETED] },
       completedAt: { $gte: today, $lte: todayEnd },
@@ -55,7 +55,7 @@ async function getSummary() {
     Complaint.countDocuments({ status: COMPLAINT_STATUSES.OPEN }),
     DriverProfile.countDocuments({ status: DRIVER_STATUSES.SUSPENDED }),
     DriverProfile.countDocuments({
-      status: { $in: [DRIVER_STATUSES.ACTIVE, DRIVER_STATUSES.BUSY] },
+      status: { $in: [DRIVER_STATUSES.ACTIVE, DRIVER_STATUSES.BUSY, DRIVER_STATUSES.ASSIGNED, DRIVER_STATUSES.ON_TRIP] },
     }),
     CommissionStatement.aggregate([
       {

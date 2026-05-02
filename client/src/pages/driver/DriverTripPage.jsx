@@ -59,7 +59,7 @@ function TripSummary({ booking, trip, onReturn }) {
       <div className="rounded-3xl border border-emerald-300/20 bg-emerald-300/5 p-8 text-center">
         <div className="mx-auto mb-4 h-4 w-4 rounded-full bg-emerald-400 shadow-[0_0_0_12px_rgba(16,185,129,0.15)]" />
         <p className="text-xl text-white">Trip complete</p>
-        <p className="mt-1 text-sm text-zinc-500">Cash collected and confirmed.</p>
+        <p className="mt-1 text-sm text-zinc-500">Payment recorded and booking completed.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -97,7 +97,7 @@ export function DriverTripPage() {
 
   useEffect(() => {
     if (payMut.isSuccess) return;
-    if (!isLoading && (!booking || booking.status === "ASSIGNED")) {
+    if (!isLoading && (!booking || ["ASSIGNED", "DRIVER_ASSIGNED"].includes(booking.status))) {
       navigate("/driver", { replace: true });
     }
   }, [booking, isLoading, payMut.isSuccess, navigate]);
@@ -156,7 +156,7 @@ export function DriverTripPage() {
           </div>
         </div>
 
-        {status === "ACCEPTED" && (
+        {["ACCEPTED", "DRIVER_ACCEPTED"].includes(status) && (
           <div className="rounded-3xl border border-cyan-300/15 bg-cyan-300/5 p-6">
             <p className="mb-1 text-base text-white">Head to the pickup location.</p>
             <p className="mb-6 text-sm text-zinc-500">
@@ -173,7 +173,7 @@ export function DriverTripPage() {
           </div>
         )}
 
-        {status === "IN_PROGRESS" && (
+        {["IN_PROGRESS", "TRIP_IN_PROGRESS"].includes(status) && (
           <div className="space-y-4">
             <LiveFareMeter startedAt={trip?.startedAt} />
             <button
@@ -187,7 +187,34 @@ export function DriverTripPage() {
           </div>
         )}
 
-        {status === "PAYMENT_PENDING" && (
+        {["TRIP_ENDED", "AWAITING_CLIENT_CONFIRMATION"].includes(status) && (
+          <div className="rounded-3xl border border-yellow-300/15 bg-yellow-300/5 p-6">
+            <p className="mb-1 text-xs uppercase tracking-widest text-zinc-500">Trip ended</p>
+            <div className="mt-4 grid grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-white/8 bg-white/3 p-4 text-center">
+                <p className="text-xs text-zinc-600">Duration</p>
+                <p className="mt-1 text-lg text-white">{trip?.durationMinutes ?? "â€”"} min</p>
+              </div>
+              <div className="rounded-2xl border border-white/8 bg-white/3 p-4 text-center">
+                <p className="text-xs text-zinc-600">Fare</p>
+                <p className="mt-1 text-lg text-emerald-300">
+                  GHS {trip?.fare?.toFixed(2) ?? booking.finalFare?.toFixed(2) ?? "â€”"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/8 bg-white/3 p-4 text-center">
+                <p className="text-xs text-zinc-600">Commission</p>
+                <p className="mt-1 text-lg text-amber-300">
+                  GHS {trip?.commissionAmount?.toFixed(2) ?? "â€”"}
+                </p>
+              </div>
+            </div>
+            <p className="mt-6 text-sm text-zinc-400">
+              Waiting for the client to confirm the completed trip before payment is recorded.
+            </p>
+          </div>
+        )}
+
+        {["PAYMENT_PENDING", "AWAITING_DRIVER_PAYMENT_CONFIRMATION"].includes(status) && (
           <div className="rounded-3xl border border-yellow-300/15 bg-yellow-300/5 p-6">
             <p className="mb-1 text-xs uppercase tracking-widest text-zinc-500">Trip complete</p>
             <div className="mt-4 grid grid-cols-3 gap-4">

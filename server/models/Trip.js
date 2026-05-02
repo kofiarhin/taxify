@@ -65,8 +65,16 @@ const tripSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["PENDING", "PAID"],
+      enum: ["PENDING", "PENDING_CLIENT_CONFIRMATION", "AWAITING_DRIVER_CONFIRMATION", "PAID"],
       default: "PENDING",
+    },
+    clientConfirmedCompleteAt: {
+      type: Date,
+      default: null,
+    },
+    driverConfirmedPaymentAt: {
+      type: Date,
+      default: null,
     },
     paymentConfirmedAt: {
       type: Date,

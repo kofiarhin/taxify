@@ -1,6 +1,12 @@
 export const BOOKING_STATUSES = {
   PENDING_ASSIGNMENT: "PENDING_ASSIGNMENT",
   QUEUED: "QUEUED",
+  DRIVER_ASSIGNED: "DRIVER_ASSIGNED",
+  DRIVER_ACCEPTED: "DRIVER_ACCEPTED",
+  TRIP_IN_PROGRESS: "TRIP_IN_PROGRESS",
+  TRIP_ENDED: "TRIP_ENDED",
+  AWAITING_CLIENT_CONFIRMATION: "AWAITING_CLIENT_CONFIRMATION",
+  AWAITING_DRIVER_PAYMENT_CONFIRMATION: "AWAITING_DRIVER_PAYMENT_CONFIRMATION",
   ASSIGNED: "ASSIGNED",
   ACCEPTED: "ACCEPTED",
   REJECTED: "REJECTED",
@@ -14,6 +20,8 @@ export const BOOKING_STATUSES = {
 export const DRIVER_STATUSES = {
   PENDING_APPROVAL: "PENDING_APPROVAL",
   ACTIVE: "ACTIVE",
+  ASSIGNED: "ASSIGNED",
+  ON_TRIP: "ON_TRIP",
   BUSY: "BUSY",
   OFFLINE: "OFFLINE",
   SUSPENDED: "SUSPENDED",
@@ -46,6 +54,12 @@ export const COMPLAINT_PRIORITIES = {
 export const BOOKING_STATUS_COLORS = {
   PENDING_ASSIGNMENT: "text-amber-300",
   QUEUED: "text-orange-300",
+  DRIVER_ASSIGNED: "text-blue-300",
+  DRIVER_ACCEPTED: "text-cyan-300",
+  TRIP_IN_PROGRESS: "text-emerald-300",
+  TRIP_ENDED: "text-yellow-300",
+  AWAITING_CLIENT_CONFIRMATION: "text-yellow-300",
+  AWAITING_DRIVER_PAYMENT_CONFIRMATION: "text-amber-300",
   ASSIGNED: "text-blue-300",
   ACCEPTED: "text-cyan-300",
   IN_PROGRESS: "text-emerald-300",
@@ -59,10 +73,30 @@ export const BOOKING_STATUS_COLORS = {
 export const DRIVER_STATUS_COLORS = {
   PENDING_APPROVAL: "text-amber-300",
   ACTIVE: "text-emerald-300",
+  ASSIGNED: "text-blue-300",
+  ON_TRIP: "text-cyan-300",
   BUSY: "text-blue-300",
   OFFLINE: "text-zinc-400",
   SUSPENDED: "text-red-300",
   DEACTIVATED: "text-zinc-600",
+};
+
+export const BOOKING_STATUS_LABELS = {
+  PENDING_ASSIGNMENT: "Finding a driver",
+  QUEUED: "Queued",
+  DRIVER_ASSIGNED: "Driver assigned",
+  DRIVER_ACCEPTED: "Driver accepted",
+  TRIP_IN_PROGRESS: "Trip in progress",
+  TRIP_ENDED: "Trip ended",
+  AWAITING_CLIENT_CONFIRMATION: "Confirm trip completion",
+  AWAITING_DRIVER_PAYMENT_CONFIRMATION: "Awaiting driver payment confirmation",
+  PAID: "Paid",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+  ASSIGNED: "Driver assigned",
+  ACCEPTED: "Driver accepted",
+  IN_PROGRESS: "Trip in progress",
+  PAYMENT_PENDING: "Payment pending",
 };
 
 export const COMMISSION_STATUS_COLORS = {

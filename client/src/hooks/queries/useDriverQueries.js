@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getDrivers, getPendingDrivers } from "../../services/driverService";
+import { getDrivers, getMyDriverProfile, getPendingDrivers } from "../../services/driverService";
 import { queryKeys } from "../queryKeys";
 
 export function usePendingDriversQuery() {
@@ -13,5 +13,12 @@ export function useAllDriversQuery() {
   return useQuery({
     queryKey: queryKeys.driversAll,
     queryFn: getDrivers,
+  });
+}
+
+export function useMyDriverProfileQuery() {
+  return useQuery({
+    queryKey: queryKeys.myDriverProfile,
+    queryFn: getMyDriverProfile,
   });
 }

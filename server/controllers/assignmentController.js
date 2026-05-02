@@ -10,7 +10,14 @@ const {
   rejectAssignment,
 } = require("../services/assignmentService");
 
-const TRIP_INCLUDED_STATUSES = [BOOKING_STATUSES.IN_PROGRESS, BOOKING_STATUSES.PAYMENT_PENDING];
+const TRIP_INCLUDED_STATUSES = [
+  BOOKING_STATUSES.IN_PROGRESS,
+  BOOKING_STATUSES.TRIP_IN_PROGRESS,
+  BOOKING_STATUSES.TRIP_ENDED,
+  BOOKING_STATUSES.PAYMENT_PENDING,
+  BOOKING_STATUSES.AWAITING_CLIENT_CONFIRMATION,
+  BOOKING_STATUSES.AWAITING_DRIVER_PAYMENT_CONFIRMATION,
+];
 
 const getMyAssignment = asyncHandler(async (req, res) => {
   const driverProfile = await DriverProfile.findOne({ userId: req.user._id });
@@ -24,7 +31,7 @@ const getMyAssignment = asyncHandler(async (req, res) => {
   let trip = null;
   if (TRIP_INCLUDED_STATUSES.includes(result.booking.status)) {
     trip = await Trip.findOne({ bookingId: result.booking._id }).select(
-      "startedAt endedAt durationMinutes fare commissionAmount paymentStatus"
+      "startedAt endedAt durationMinutes fare commissionAmount paymentStatus clientConfirmedCompleteAt driverConfirmedPaymentAt"
     );
   }
 

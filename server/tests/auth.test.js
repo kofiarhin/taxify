@@ -26,4 +26,18 @@ describe("auth flow", () => {
     expect(response.statusCode).toBe(401);
     expect(response.body.success).toBe(false);
   });
+
+  it("registers a client account without exposing password hashes", async () => {
+    const response = await request(app).post("/api/v1/auth/register-client").send({
+      fullName: "Avery Mensah",
+      email: "avery.client@taxify.local",
+      phone: "+1 (312) 847-3049",
+      password: "TaxifyPass123",
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.body.data.token).toBeTruthy();
+    expect(response.body.data.user.role).toBe("CLIENT");
+    expect(response.body.data.user.passwordHash).toBeUndefined();
+  });
 });

@@ -35,4 +35,11 @@ router.post(
   confirmPayment
 );
 
+router.post(
+  "/:bookingId/confirm-payment",
+  requireRole(ROLES.DRIVER),
+  validateRequest(tripValidationSchemas.bookingId),
+  confirmPayment
+);
+
 module.exports = router;

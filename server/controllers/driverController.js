@@ -38,9 +38,15 @@ const list = asyncHandler(async (_req, res) => {
     status: {
       $in: [
         BOOKING_STATUSES.ASSIGNED,
+        BOOKING_STATUSES.DRIVER_ASSIGNED,
         BOOKING_STATUSES.ACCEPTED,
+        BOOKING_STATUSES.DRIVER_ACCEPTED,
         BOOKING_STATUSES.IN_PROGRESS,
+        BOOKING_STATUSES.TRIP_IN_PROGRESS,
+        BOOKING_STATUSES.TRIP_ENDED,
         BOOKING_STATUSES.PAYMENT_PENDING,
+        BOOKING_STATUSES.AWAITING_CLIENT_CONFIRMATION,
+        BOOKING_STATUSES.AWAITING_DRIVER_PAYMENT_CONFIRMATION,
       ],
     },
   }).select("bookingReference customerName pickupAddress dropoffAddress status assignedDriverId");

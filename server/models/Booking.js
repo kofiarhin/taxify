@@ -13,6 +13,11 @@ const bookingSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    clientId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     customerName: {
       type: String,
       required: true,
@@ -89,6 +94,18 @@ const bookingSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    clientConfirmedAt: {
+      type: Date,
+      default: null,
+    },
+    driverPaymentConfirmedAt: {
+      type: Date,
+      default: null,
+    },
+    paymentRecordedAt: {
+      type: Date,
+      default: null,
+    },
     paidAt: {
       type: Date,
       default: null,
@@ -102,5 +119,7 @@ const bookingSchema = new mongoose.Schema(
 bookingSchema.index({ status: 1, createdAt: -1 });
 bookingSchema.index({ assignedDriverId: 1 });
 bookingSchema.index({ createdBy: 1 });
+bookingSchema.index({ clientId: 1, status: 1, createdAt: -1 });
+bookingSchema.index({ clientId: 1, createdAt: -1 });
 
 module.exports = mongoose.models.Booking || mongoose.model("Booking", bookingSchema);

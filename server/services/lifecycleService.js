@@ -15,6 +15,12 @@ const AUTO_SUSPENSION_REASON = "Overdue commission payment";
 const AUTO_DEACTIVATION_REASON = "Long-term overdue commission payment";
 
 const ACTIVE_BOOKING_STATUSES = [
+  BOOKING_STATUSES.DRIVER_ASSIGNED,
+  BOOKING_STATUSES.DRIVER_ACCEPTED,
+  BOOKING_STATUSES.TRIP_IN_PROGRESS,
+  BOOKING_STATUSES.TRIP_ENDED,
+  BOOKING_STATUSES.AWAITING_CLIENT_CONFIRMATION,
+  BOOKING_STATUSES.AWAITING_DRIVER_PAYMENT_CONFIRMATION,
   BOOKING_STATUSES.ASSIGNED,
   BOOKING_STATUSES.ACCEPTED,
   BOOKING_STATUSES.IN_PROGRESS,
@@ -324,7 +330,23 @@ async function isDriverEligibleForDispatch(driver, options = {}) {
 async function setDriverBusy(driverProfileId) {
   const driver = await DriverProfile.findById(driverProfileId);
   if (!driver) throw new ApiError(404, "Driver profile not found");
-  driver.status = DRIVER_STATUSES.BUSY;
+  driver.status = DRIVER_STATUSES.ON_TRIP;
+  await driver.save();
+  return driver;
+}
+
+async function setDriverAssigned(driverProfileId) {
+  const driver = await DriverProfile.findById(driverProfileId);
+  if (!driver) throw new ApiError(404, "Driver profile not found");
+  driver.status = DRIVER_STATUSES.ASSIGNED;
+  await driver.save();
+  return driver;
+}
+
+async function setDriverOnTrip(driverProfileId) {
+  const driver = await DriverProfile.findById(driverProfileId);
+  if (!driver) throw new ApiError(404, "Driver profile not found");
+  driver.status = DRIVER_STATUSES.ON_TRIP;
   await driver.save();
   return driver;
 }
@@ -421,7 +443,9 @@ module.exports = {
   normalizeLifecycleOptions,
   releaseDriverFromAssignment,
   returnDriverToAvailable,
+  setDriverAssigned,
   setDriverAvailableIfEligible,
   setDriverBusy,
+  setDriverOnTrip,
   syncDriverSuspension: evaluateDriverLifecycle,
 };

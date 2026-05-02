@@ -26,7 +26,7 @@ export async function endTrip(bookingId) {
 }
 
 export async function confirmPayment(bookingId) {
-  const response = await api.post(`/trips/${bookingId}/confirm-cash-payment`);
+  const response = await api.post(`/trips/${bookingId}/confirm-payment`);
   return response.data.data;
 }
 

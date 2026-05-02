@@ -7,12 +7,30 @@ import { setSocketState } from "../redux/ui/uiSlice";
 
 const EVENT_INVALIDATIONS = {
   "booking.created": [queryKeys.agentBookings, queryKeys.bookingsRoot, queryKeys.dashboardSummary],
+  "client.booking.created": [queryKeys.clientCurrentBooking, queryKeys.agentBookings, queryKeys.bookingsRoot, queryKeys.dashboardSummary],
   "booking.assigned": [queryKeys.agentBookings, queryKeys.bookingsRoot, queryKeys.queue, queryKeys.myAssignment, queryKeys.dashboardSummary],
   "booking.queued": [queryKeys.agentBookings, queryKeys.bookingsRoot, queryKeys.queue, queryKeys.dashboardSummary],
-  "driver.accepted": [queryKeys.agentBookings, queryKeys.myAssignment, queryKeys.dashboardSummary],
+  "driver.accepted": [queryKeys.agentBookings, queryKeys.myAssignment, queryKeys.clientCurrentBooking, queryKeys.dashboardSummary],
   "driver.rejected": [queryKeys.agentBookings, queryKeys.queue, queryKeys.myAssignment, queryKeys.dashboardSummary],
-  "trip.started": [queryKeys.myAssignment, queryKeys.driverTrips, queryKeys.tripsAll, queryKeys.dashboardSummary],
-  "trip.ended": [queryKeys.myAssignment, queryKeys.driverTrips, queryKeys.tripsAll, queryKeys.dashboardSummary],
+  "trip.started": [queryKeys.myAssignment, queryKeys.clientCurrentBooking, queryKeys.driverTrips, queryKeys.tripsAll, queryKeys.dashboardSummary],
+  "trip.ended": [queryKeys.myAssignment, queryKeys.clientCurrentBooking, queryKeys.driverTrips, queryKeys.tripsAll, queryKeys.dashboardSummary],
+  "client.confirmed_complete": [queryKeys.myAssignment, queryKeys.clientCurrentBooking, queryKeys.driverTrips, queryKeys.tripsAll, queryKeys.dashboardSummary],
+  "driver.confirmed_payment": [
+    queryKeys.myAssignment,
+    queryKeys.clientCurrentBooking,
+    queryKeys.driverTrips,
+    queryKeys.driverCommissions,
+    queryKeys.tripsAll,
+    queryKeys.dashboardSummary,
+  ],
+  "booking.completed": [
+    queryKeys.myAssignment,
+    queryKeys.clientCurrentBooking,
+    queryKeys.driverTrips,
+    queryKeys.driverCommissions,
+    queryKeys.tripsAll,
+    queryKeys.dashboardSummary,
+  ],
   "payment.confirmed": [
     queryKeys.myAssignment,
     queryKeys.driverTrips,
@@ -21,6 +39,13 @@ const EVENT_INVALIDATIONS = {
     queryKeys.dashboardSummary,
   ],
   "commission.updated": [queryKeys.driverCommissions, queryKeys.commissionsAll, queryKeys.dashboardSummary],
+  "driver.reviewed": [
+    queryKeys.clientCurrentBooking,
+    queryKeys.myAssignment,
+    queryKeys.myDriverProfile,
+    queryKeys.driversAll,
+    queryKeys.dashboardSummary,
+  ],
 };
 
 export function useSocketSync() {

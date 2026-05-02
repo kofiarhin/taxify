@@ -120,7 +120,7 @@ async function dispatchBooking(bookingId, mode = ASSIGNMENT_MODES.AUTO, options 
     }
 
     assignmentDriver.currentAssignmentId = attempt._id;
-    assignmentDriver.status = DRIVER_STATUSES.BUSY;
+    assignmentDriver.status = DRIVER_STATUSES.ASSIGNED;
     assignmentDriver.lastAssignedAt = assignedAt;
     await assignmentDriver.save({ session });
 
@@ -129,7 +129,7 @@ async function dispatchBooking(bookingId, mode = ASSIGNMENT_MODES.AUTO, options 
     assignmentBooking = await bookingQuery;
     if (!assignmentBooking) throw new ApiError(404, "Booking not found");
 
-    assignmentBooking.status = BOOKING_STATUSES.ASSIGNED;
+    assignmentBooking.status = BOOKING_STATUSES.DRIVER_ASSIGNED;
     assignmentBooking.assignedDriverId = assignmentDriver._id;
     assignmentBooking.assignmentMode = mode;
     assignmentBooking.queueEnteredAt = null;
@@ -160,6 +160,8 @@ async function dispatchBooking(bookingId, mode = ASSIGNMENT_MODES.AUTO, options 
     bookingId: assignmentBooking._id.toString(),
     driverId: assignmentDriver._id.toString(),
     assignmentId: attempt._id.toString(),
+    status: assignmentBooking.status,
+    occurredAt: new Date().toISOString(),
   });
 
   return { assigned: true, booking: assignmentBooking, attempt, driver: assignmentDriver };
@@ -181,6 +183,7 @@ async function acceptAssignment(attemptId, driverProfileId) {
   const driver = await evaluateDriverLifecycle(driverProfileId);
   if (
     driver.status !== DRIVER_STATUSES.ACTIVE &&
+    driver.status !== DRIVER_STATUSES.ASSIGNED &&
     driver.status !== DRIVER_STATUSES.BUSY
   ) {
     throw new ApiError(403, "Driver is not eligible to accept assignments");
@@ -191,13 +194,15 @@ async function acceptAssignment(attemptId, driverProfileId) {
   await attempt.save();
 
   const booking = await Booking.findById(attempt.bookingId);
-  booking.status = BOOKING_STATUSES.ACCEPTED;
+  booking.status = BOOKING_STATUSES.DRIVER_ACCEPTED;
   booking.acceptedAt = new Date();
   await booking.save();
   emitDomainEvent("driver.accepted", {
     bookingId: booking._id.toString(),
     driverId: driverProfileId.toString(),
     assignmentId: attempt._id.toString(),
+    status: booking.status,
+    occurredAt: new Date().toISOString(),
   });
 
   return { attempt, booking };
@@ -240,9 +245,15 @@ async function getCurrentAssignmentForDriver(driverProfileId) {
     status: {
       $in: [
         BOOKING_STATUSES.ASSIGNED,
+        BOOKING_STATUSES.DRIVER_ASSIGNED,
         BOOKING_STATUSES.ACCEPTED,
+        BOOKING_STATUSES.DRIVER_ACCEPTED,
         BOOKING_STATUSES.IN_PROGRESS,
+        BOOKING_STATUSES.TRIP_IN_PROGRESS,
+        BOOKING_STATUSES.TRIP_ENDED,
         BOOKING_STATUSES.PAYMENT_PENDING,
+        BOOKING_STATUSES.AWAITING_CLIENT_CONFIRMATION,
+        BOOKING_STATUSES.AWAITING_DRIVER_PAYMENT_CONFIRMATION,
       ],
     },
   });
@@ -301,7 +312,7 @@ async function expireAssignmentAttempt(attemptOrId, options = {}) {
 
   if (
     options.reassign !== false &&
-    booking.status === BOOKING_STATUSES.ASSIGNED &&
+    [BOOKING_STATUSES.ASSIGNED, BOOKING_STATUSES.DRIVER_ASSIGNED].includes(booking.status) &&
     booking.assignedDriverId?.toString() === attempt.driverId.toString()
   ) {
     await releaseDriverFromAssignment(attempt.driverId, attempt._id, {

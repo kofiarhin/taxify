@@ -1,14 +1,14 @@
 import { ShieldCheck, SteeringWheel, WaveTriangle } from "@phosphor-icons/react";
 import { useForm } from "react-hook-form";
 import { useDispatch, useSelector } from "react-redux";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { authFailed, authRequestStarted, authResolved } from "../../redux/auth/authSlice";
 import { login } from "../../services/authService";
 
 const quickAccounts = [
   { role: "Admin", email: "admin@taxify.local", lane: "Control room access" },
-  { role: "Agent", email: "agent@taxify.local", lane: "Dispatch desk access" },
   { role: "Driver", email: "driver@taxify.local", lane: "Driver mobile access" },
+  { role: "Client", email: "client@taxify.local", lane: "Ride booking access" },
 ];
 
 export function LoginPage() {
@@ -35,6 +35,10 @@ export function LoginPage() {
 
   if (user?.role === "DRIVER") {
     return <Navigate to="/driver" replace />;
+  }
+
+  if (user?.role === "CLIENT") {
+    return <Navigate to="/client" replace />;
   }
 
   async function onSubmit(values) {
@@ -153,6 +157,9 @@ export function LoginPage() {
             >
               {status === "loading" ? "Verifying access..." : "Enter control room"}
             </button>
+            <Link to="/register-client" className="mt-4 block text-center text-sm text-zinc-500 hover:text-zinc-300">
+              Create a client account
+            </Link>
           </form>
         </section>
       </div>

@@ -24,5 +24,9 @@ function getDefaultRoute(role) {
     return "/agent";
   }
 
+  if (role === "CLIENT") {
+    return "/client";
+  }
+
   return "/driver";
 }

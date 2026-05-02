@@ -5,6 +5,7 @@ import {
   CurrencyDollar,
   House,
   ListBullets,
+  MapPin,
   PlusCircle,
   SignOut,
   SteeringWheel,
@@ -36,6 +37,11 @@ const roleNavigation = {
     { to: "/driver", label: "Drive", icon: SteeringWheel, end: true },
     { to: "/driver/trips", label: "Trip History", icon: ListBullets },
     { to: "/driver/commissions", label: "Commission", icon: CurrencyDollar },
+  ],
+  CLIENT: [
+    { to: "/client", label: "Ride", icon: House, end: true },
+    { to: "/client/bookings/new", label: "New Booking", icon: PlusCircle },
+    { to: "/client/bookings/current", label: "Tracker", icon: MapPin },
   ],
 };
 

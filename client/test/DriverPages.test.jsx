@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import { DriverWorkspacePage } from "../src/pages/driver/DriverWorkspacePage";
+import { DriverTripPage } from "../src/pages/driver/DriverTripPage";
 import { DriverCommissionsPage } from "../src/pages/driver/DriverCommissionsPage";
 import { renderWithProviders } from "./test-utils";
 
@@ -8,6 +9,7 @@ const mockAssignmentQuery = vi.fn();
 const mockTripMutation = vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false }));
 const mockCommissionQuery = vi.fn();
 const mockUploadMutation = vi.fn();
+const mockDriverProfileQuery = vi.fn();
 
 vi.mock("../src/hooks/queries/useTripQueries", () => ({
   useMyAssignmentQuery: () => mockAssignmentQuery(),
@@ -23,6 +25,10 @@ vi.mock("../src/hooks/mutations/useTripMutations", () => ({
 
 vi.mock("../src/hooks/queries/useCommissionQueries", () => ({
   useDriverCommissionsQuery: () => mockCommissionQuery(),
+}));
+
+vi.mock("../src/hooks/queries/useDriverQueries", () => ({
+  useMyDriverProfileQuery: () => mockDriverProfileQuery(),
 }));
 
 vi.mock("../src/hooks/mutations/useCommissionMutations", () => ({
@@ -44,6 +50,12 @@ describe("driver pages", () => {
     mockAssignmentQuery.mockReset();
     mockCommissionQuery.mockReset();
     mockUploadMutation.mockReset();
+    mockDriverProfileQuery.mockReset();
+    mockDriverProfileQuery.mockReturnValue({
+      data: { averageRating: 0, reviewCount: 0 },
+      isLoading: false,
+      isError: false,
+    });
   });
 
   it("renders accept and reject controls for assigned bookings", () => {
@@ -73,6 +85,18 @@ describe("driver pages", () => {
     expect(screen.getByRole("button", { name: /reject/i })).toBeInTheDocument();
   });
 
+  it("shows the driver rating empty state when no reviews exist", () => {
+    mockAssignmentQuery.mockReturnValue({
+      data: { booking: null, attempt: null, trip: null },
+      isLoading: false,
+      isError: false,
+    });
+
+    renderWithProviders(<DriverWorkspacePage />, { preloadedState: authState() });
+
+    expect(screen.getByText(/no reviews yet/i)).toBeInTheDocument();
+  });
+
   it("renders trip controls for accepted, in-progress, and payment-pending states", () => {
     mockAssignmentQuery.mockReturnValueOnce({
       data: {
@@ -90,7 +114,7 @@ describe("driver pages", () => {
       isLoading: false,
       isError: false,
     });
-    const acceptedView = renderWithProviders(<DriverWorkspacePage />, { preloadedState: authState() });
+    const acceptedView = renderWithProviders(<DriverTripPage />, { preloadedState: authState() });
     expect(screen.getByRole("button", { name: /start trip/i })).toBeInTheDocument();
     acceptedView.unmount();
 
@@ -110,7 +134,7 @@ describe("driver pages", () => {
       isLoading: false,
       isError: false,
     });
-    const progressView = renderWithProviders(<DriverWorkspacePage />, { preloadedState: authState() });
+    const progressView = renderWithProviders(<DriverTripPage />, { preloadedState: authState() });
     expect(screen.getByRole("button", { name: /end trip/i })).toBeInTheDocument();
     progressView.unmount();
 
@@ -131,7 +155,7 @@ describe("driver pages", () => {
       isLoading: false,
       isError: false,
     });
-    renderWithProviders(<DriverWorkspacePage />, { preloadedState: authState() });
+    renderWithProviders(<DriverTripPage />, { preloadedState: authState() });
     expect(screen.getByRole("button", { name: /confirm cash collected/i })).toBeInTheDocument();
   });
 

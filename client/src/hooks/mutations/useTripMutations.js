@@ -10,6 +10,7 @@ import { queryKeys } from "../queryKeys";
 
 async function invalidateTripQueries(queryClient) {
   await queryClient.invalidateQueries({ queryKey: queryKeys.myAssignment });
+  await queryClient.invalidateQueries({ queryKey: queryKeys.clientCurrentBooking });
   await queryClient.invalidateQueries({ queryKey: queryKeys.driverTrips });
   await queryClient.invalidateQueries({ queryKey: queryKeys.agentBookings });
   await queryClient.invalidateQueries({ queryKey: queryKeys.queue });

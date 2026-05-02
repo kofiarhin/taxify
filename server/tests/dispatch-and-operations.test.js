@@ -4,6 +4,7 @@ const Complaint = require("../models/Complaint");
 const AssignmentAttempt = require("../models/AssignmentAttempt");
 const CommissionStatement = require("../models/CommissionStatement");
 const DriverProfile = require("../models/DriverProfile");
+const DriverReview = require("../models/DriverReview");
 const { cancelBooking: cancelBookingService } = require("../services/bookingCancellationService");
 const { expirePendingAssignments } = require("../services/assignmentService");
 const { syncDriverSuspension } = require("../services/driverStatusService");
@@ -46,6 +47,55 @@ async function createBookingVia(role, payload = bookingPayload()) {
     .send(payload);
 
   return { actor, response };
+}
+
+async function completeClientRideForReview() {
+  const client = await createAuthenticatedRequest(ROLES.CLIENT, {
+    fullName: "Imani Carver",
+    email: `client-review-${Math.random().toString(36).slice(2, 7)}@taxify.local`,
+  });
+  const driver = await createDriverAccount({
+    vehiclePlate: `RV-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+  });
+
+  const createResponse = await request(app)
+    .post("/api/v1/client/bookings")
+    .set(client.headers)
+    .send({
+      pickupAddress: "18 Regent Street, London",
+      dropoffAddress: "72 King Street, London",
+      pickupTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      specialInstructions: "Use the side entrance",
+    });
+
+  const bookingId = createResponse.body.data.booking._id;
+  const attempt = await AssignmentAttempt.findOne({
+    bookingId,
+    driverId: driver.driverProfile._id,
+  });
+
+  await request(app)
+    .post(`/api/v1/assignments/${attempt._id}/accept`)
+    .set(getAuthHeader(driver.user))
+    .send({});
+  await request(app)
+    .post(`/api/v1/trips/${bookingId}/start`)
+    .set(getAuthHeader(driver.user))
+    .send({});
+  await request(app)
+    .post(`/api/v1/trips/${bookingId}/end`)
+    .set(getAuthHeader(driver.user))
+    .send({});
+  await request(app)
+    .post(`/api/v1/client/bookings/${bookingId}/confirm-complete`)
+    .set(client.headers)
+    .send({});
+  await request(app)
+    .post(`/api/v1/trips/${bookingId}/confirm-payment`)
+    .set(getAuthHeader(driver.user))
+    .send({});
+
+  return { client, driver, bookingId };
 }
 
 describe("dispatch and operations flow", () => {
@@ -230,6 +280,203 @@ describe("dispatch and operations flow", () => {
     expect(endResponse.body.data.trip.durationMinutes).toBeGreaterThanOrEqual(15);
     expect(endResponse.body.data.trip.fare).toBeGreaterThanOrEqual(20);
     expect(endResponse.body.data.booking.status).toBe(BOOKING_STATUSES.PAYMENT_PENDING);
+  });
+
+  it("runs the client-led booking lifecycle through dual confirmation", async () => {
+    const client = await createAuthenticatedRequest(ROLES.CLIENT, {
+      fullName: "Avery Mensah",
+      email: "client-flow@taxify.local",
+    });
+    const driver = await createDriverAccount({ vehiclePlate: "TX-CLNT" });
+
+    const createResponse = await request(app)
+      .post("/api/v1/client/bookings")
+      .set(client.headers)
+      .send({
+        pickupAddress: "21 River Lane, London",
+        dropoffAddress: "45 Museum Street, London",
+        pickupTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        specialInstructions: "Meet outside reception",
+      });
+
+    expect(createResponse.statusCode).toBe(201);
+    const bookingId = createResponse.body.data.booking._id;
+    expect(createResponse.body.data.booking.clientId._id || createResponse.body.data.booking.clientId).toBe(String(client.user._id));
+    expect(createResponse.body.data.booking.status).toBe(BOOKING_STATUSES.DRIVER_ASSIGNED);
+
+    const attempt = await AssignmentAttempt.findOne({ bookingId, driverId: driver.driverProfile._id });
+    expect(attempt).toBeTruthy();
+
+    const acceptResponse = await request(app)
+      .post(`/api/v1/assignments/${attempt._id}/accept`)
+      .set(getAuthHeader(driver.user))
+      .send({});
+    expect(acceptResponse.statusCode).toBe(200);
+    expect(acceptResponse.body.data.booking.status).toBe(BOOKING_STATUSES.DRIVER_ACCEPTED);
+
+    const startResponse = await request(app)
+      .post(`/api/v1/trips/${bookingId}/start`)
+      .set(getAuthHeader(driver.user))
+      .send({});
+    expect(startResponse.statusCode).toBe(201);
+    expect(startResponse.body.data.booking.status).toBe(BOOKING_STATUSES.TRIP_IN_PROGRESS);
+
+    const endResponse = await request(app)
+      .post(`/api/v1/trips/${bookingId}/end`)
+      .set(getAuthHeader(driver.user))
+      .send({});
+    expect(endResponse.statusCode).toBe(200);
+    expect(endResponse.body.data.booking.status).toBe(BOOKING_STATUSES.AWAITING_CLIENT_CONFIRMATION);
+
+    const prematurePayment = await request(app)
+      .post(`/api/v1/trips/${bookingId}/confirm-payment`)
+      .set(getAuthHeader(driver.user))
+      .send({});
+    expect(prematurePayment.statusCode).toBe(400);
+
+    const currentResponse = await request(app)
+      .get("/api/v1/client/bookings/current")
+      .set(client.headers);
+    expect(currentResponse.statusCode).toBe(200);
+    expect(currentResponse.body.data.booking._id).toBe(bookingId);
+    expect(currentResponse.body.data.trip.fare).toBeGreaterThanOrEqual(0);
+
+    const clientConfirmResponse = await request(app)
+      .post(`/api/v1/client/bookings/${bookingId}/confirm-complete`)
+      .set(client.headers)
+      .send({});
+    expect(clientConfirmResponse.statusCode).toBe(200);
+    expect(clientConfirmResponse.body.data.booking.status).toBe(
+      BOOKING_STATUSES.AWAITING_DRIVER_PAYMENT_CONFIRMATION
+    );
+
+    const paymentResponse = await request(app)
+      .post(`/api/v1/trips/${bookingId}/confirm-payment`)
+      .set(getAuthHeader(driver.user))
+      .send({});
+    expect(paymentResponse.statusCode).toBe(200);
+    expect(paymentResponse.body.data.booking.status).toBe(BOOKING_STATUSES.COMPLETED);
+
+    const refreshedDriver = await DriverProfile.findById(driver.driverProfile._id);
+    expect(refreshedDriver.status).toBe(DRIVER_STATUSES.ACTIVE);
+
+    const commission = await CommissionStatement.findOne({ driverId: driver.driverProfile._id });
+    expect(commission).toBeTruthy();
+  });
+
+  it("lets a client review a completed ride once and updates driver rating aggregates", async () => {
+    const { client, driver, bookingId } = await completeClientRideForReview();
+
+    const currentBeforeReview = await request(app)
+      .get("/api/v1/client/bookings/current")
+      .set(client.headers);
+
+    expect(currentBeforeReview.statusCode).toBe(200);
+    expect(currentBeforeReview.body.data.booking._id).toBe(bookingId);
+    expect(currentBeforeReview.body.data.review).toMatchObject({
+      eligible: true,
+      submitted: false,
+      rating: null,
+    });
+
+    const reviewResponse = await request(app)
+      .post(`/api/v1/client/bookings/${bookingId}/review`)
+      .set(client.headers)
+      .send({ rating: 5, comment: "Calm driving and clear pickup communication." });
+
+    expect(reviewResponse.statusCode).toBe(201);
+    expect(reviewResponse.body.data.review).toMatchObject({
+      rating: 5,
+      comment: "Calm driving and clear pickup communication.",
+    });
+    expect(reviewResponse.body.data.driverRating).toMatchObject({
+      averageRating: 5,
+      reviewCount: 1,
+    });
+
+    const storedReview = await DriverReview.findOne({ bookingId });
+    const refreshedDriver = await DriverProfile.findById(driver.driverProfile._id);
+    expect(storedReview.rating).toBe(5);
+    expect(refreshedDriver.reviewCount).toBe(1);
+    expect(refreshedDriver.ratingTotal).toBe(5);
+    expect(refreshedDriver.averageRating).toBe(5);
+
+    const duplicateResponse = await request(app)
+      .post(`/api/v1/client/bookings/${bookingId}/review`)
+      .set(client.headers)
+      .send({ rating: 4 });
+
+    expect(duplicateResponse.statusCode).toBe(409);
+
+    const currentAfterReview = await request(app)
+      .get("/api/v1/client/bookings/current")
+      .set(client.headers);
+    expect(currentAfterReview.body.data.review).toMatchObject({
+      eligible: false,
+      submitted: true,
+      rating: 5,
+    });
+  });
+
+  it("blocks invalid or unauthorized driver reviews", async () => {
+    const { client, bookingId } = await completeClientRideForReview();
+    const otherClient = await createAuthenticatedRequest(ROLES.CLIENT, {
+      email: `other-review-${Math.random().toString(36).slice(2, 7)}@taxify.local`,
+    });
+    const driverUser = await createAuthenticatedRequest(ROLES.DRIVER);
+
+    const invalidRating = await request(app)
+      .post(`/api/v1/client/bookings/${bookingId}/review`)
+      .set(client.headers)
+      .send({ rating: 6 });
+    expect(invalidRating.statusCode).toBe(400);
+
+    const decimalRating = await request(app)
+      .post(`/api/v1/client/bookings/${bookingId}/review`)
+      .set(client.headers)
+      .send({ rating: 4.5 });
+    expect(decimalRating.statusCode).toBe(400);
+
+    const longComment = await request(app)
+      .post(`/api/v1/client/bookings/${bookingId}/review`)
+      .set(client.headers)
+      .send({ rating: 4, comment: "x".repeat(501) });
+    expect(longComment.statusCode).toBe(400);
+
+    const forbiddenClient = await request(app)
+      .post(`/api/v1/client/bookings/${bookingId}/review`)
+      .set(otherClient.headers)
+      .send({ rating: 4 });
+    expect(forbiddenClient.statusCode).toBe(403);
+
+    const forbiddenDriver = await request(app)
+      .post(`/api/v1/client/bookings/${bookingId}/review`)
+      .set(driverUser.headers)
+      .send({ rating: 4 });
+    expect(forbiddenDriver.statusCode).toBe(403);
+  });
+
+  it("prevents reviews before booking completion", async () => {
+    const client = await createAuthenticatedRequest(ROLES.CLIENT, {
+      email: `early-review-${Math.random().toString(36).slice(2, 7)}@taxify.local`,
+    });
+    await createDriverAccount({ vehiclePlate: "RV-EARLY" });
+
+    const createResponse = await request(app)
+      .post("/api/v1/client/bookings")
+      .set(client.headers)
+      .send({
+        pickupAddress: "31 Orchard Road, London",
+        dropoffAddress: "8 Bloomsbury Way, London",
+        pickupTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      });
+
+    const reviewResponse = await request(app)
+      .post(`/api/v1/client/bookings/${createResponse.body.data.booking._id}/review`)
+      .set(client.headers)
+      .send({ rating: 5 });
+
+    expect(reviewResponse.statusCode).toBe(422);
   });
 
   it("calculates fare with base plus duration when distance is omitted", async () => {

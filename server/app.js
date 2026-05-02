@@ -15,6 +15,7 @@ const commissionRoutes = require("./routes/commissionRoutes");
 const complaintRoutes = require("./routes/complaintRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const clientRoutes = require("./routes/clientRoutes");
 const { notFound } = require("./middleware/notFound");
 const { errorHandler } = require("./middleware/errorHandler");
 
@@ -61,6 +62,7 @@ app.use("/api/v1/commissions", commissionRoutes);
 app.use("/api/v1/complaints", complaintRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/client", clientRoutes);
 app.use("/api/admin", adminRoutes);
 
 app.use(notFound);
