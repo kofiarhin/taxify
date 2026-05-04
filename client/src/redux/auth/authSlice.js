@@ -16,9 +16,21 @@ const authSlice = createSlice({
       state.error = null;
     },
     authResolved(state, action) {
+      const payload = action?.payload ?? {};
+      const user = payload.user ?? null;
+      const token = payload.token ?? state.token ?? null;
+
+      if (!user) {
+        state.status = "idle";
+        state.user = null;
+        state.token = null;
+        state.error = "Invalid login response from server";
+        return;
+      }
+
       state.status = "authenticated";
-      state.user = action.payload.user;
-      state.token = action.payload.token ?? state.token;
+      state.user = user;
+      state.token = token;
       state.error = null;
     },
     authCheckFinished(state) {
@@ -30,7 +42,7 @@ const authSlice = createSlice({
       state.status = "idle";
       state.user = null;
       state.token = null;
-      state.error = action.payload;
+      state.error = action?.payload || "Authentication failed";
     },
     logoutSucceeded(state) {
       state.status = "idle";

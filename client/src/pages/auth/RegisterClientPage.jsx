@@ -25,7 +25,8 @@ export function RegisterClientPage() {
       window.localStorage.setItem("taxify_token", data.token);
       dispatch(authResolved(data));
     } catch (submitError) {
-      dispatch(authFailed(submitError.message));
+      window.localStorage.removeItem("taxify_token");
+      dispatch(authFailed(submitError?.message || "Unable to create account"));
     }
   }
 
