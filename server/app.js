@@ -33,7 +33,7 @@ app.use(
     origin(origin, callback) {
       if (!origin) return callback(null, true);
       const allowed = env.CLIENT_URL.some((entry) => {
-        if (entry.startsWith("*.")) return origin.endsWith(entry.slice(1));
+        if (entry.startsWith("*")) return origin.endsWith(entry.slice(1));
         return entry === origin;
       });
       if (allowed) return callback(null, true);
