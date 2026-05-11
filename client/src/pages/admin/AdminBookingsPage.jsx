@@ -39,7 +39,12 @@ export function AdminBookingsPage() {
           const fareTotal = Number(booking.fare?.total || 0).toFixed(2);
 
           return (
-            <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-center" key={booking._id}>
+            <div
+              aria-label={`Booking ${booking.pickupAddress} to ${booking.dropoffAddress}`}
+              className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-center"
+              key={booking._id}
+              role="region"
+            >
               <div className="min-w-0">
                 <p className="break-words font-semibold">
                   {booking.pickupAddress} to {booking.dropoffAddress}

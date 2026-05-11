@@ -30,6 +30,7 @@ This file captures durable repository facts discovered during workflow runs. Kee
 # Test
 npm test
 cd client && npm test
+npm run test:e2e
 
 # Lint
 none configured
@@ -45,7 +46,7 @@ none configured
 
 - Unit tests: Vitest for frontend smoke/component tests
 - Integration tests: Jest + Supertest + mongodb-memory-server for backend API behavior
-- End-to-end tests: none configured
+- End-to-end tests: Playwright at repo root under `e2e/`, run with `npm run test:e2e`
 - Manual verification notes: REST-only phase; no Socket.IO client/server runtime is configured.
 
 ## Repo Conventions
@@ -63,6 +64,7 @@ none configured
 - Admin booking operations include cancel, dispute, reassign, retry assignment, and completion override through REST endpoints under `/api/bookings/:bookingId`.
 - Frontend API calls go through `client/src/lib/api.js`; service files and query/mutation hooks wrap server calls.
 - Backend validates required environment variables at startup.
+- Browser E2E tests start isolated local Express and Vite servers with MongoDB Memory Server via Playwright `webServer`; generated E2E state lives under ignored `e2e/.state/`.
 
 ## Known Constraints
 

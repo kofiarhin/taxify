@@ -277,3 +277,55 @@ After appending each task entry, update `_handoff/current.md` with the latest cu
 - Review result: Reviewed; workflow health Passed.
 - Blockers: none
 - Next step: Final response.
+
+### 2026-05-13 10:10 - ADD-ROLE-E2E TASK-001
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `WORK_REQUEST.md`, `.gitignore`, `.env.example`, `package.json`, `package-lock.json`, `playwright.config.js`, `e2e/helpers/e2eState.js`, `e2e/helpers/e2eSeed.js`, `e2e/helpers/e2eServer.js`, `e2e/helpers/seedE2e.js`, `_spec/2026-05-13-add-role-e2e-tests.md`, `_task/2026-05-13-add-role-e2e-tests.md`, `_handoff/current.md`
+- Dirty worktree protection: Initial implementation worktree was clean except the workflow request/spec/plan/handoff files intentionally created for this request.
+- Acceptance result: `[x]` Playwright config and scripts exist; `[x]` E2E seed/setup avoids production services through MongoDB Memory Server; `[x]` seed creates admin, agent, client, approved active drivers, and driver/admin booking states; `[x]` existing backend tests pass.
+- Verification result: `npm test` passed 3 suites/12 tests. `npx playwright --version` returned 1.60.0. `node --check` passed for Playwright config and E2E helper files. A MongoDB Memory Server seed smoke printed seeded credential roles and booking IDs. `npm run test:e2e -- --list` returned nonzero because there were intentionally 0 spec files at TASK-001.
+- Failure recovery notes: The failing command was `npm run test:e2e -- --list`; Playwright reported `Total: 0 tests in 0 files` and `No tests found`. Classified as a task-plan verification mismatch before scenario specs exist, not a harness implementation defect. Added syntax/version checks and a direct seed smoke to verify the harness until TASK-002/TASK-003 add specs.
+- Review result: Reviewed; no production services or secrets are used, generated E2E state is gitignored, and E2E port/base URL overrides are documented in `.env.example`.
+- Blockers: none
+- Next step: TASK-002
+
+### 2026-05-13 10:35 - ADD-ROLE-E2E TASK-002
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `e2e/helpers/testHelpers.js`, `e2e/client-booking.spec.js`, `e2e/agent-booking.spec.js`, `_task/2026-05-13-add-role-e2e-tests.md`, `_progress/progress.md`, `_handoff/current.md`
+- Dirty worktree protection: TASK-002 edits were scoped to E2E helper/spec files and workflow artifacts; no frontend source files were changed.
+- Acceptance result: `[x]` client E2E happy path exists; `[x]` agent E2E happy path exists; `[x]` tests use isolated seeded credentials/data; `[x]` existing frontend tests/build pass.
+- Verification result: `npm test` passed 3 suites/12 tests. `cd client && npm test` passed 2 suites/3 tests. `cd client && npm run build` passed. `npm run test:e2e -- e2e/client-booking.spec.js e2e/agent-booking.spec.js` passed 2 tests after installing the Playwright Chromium browser.
+- Failure recovery notes: First E2E run failed because Playwright Chromium was not installed at `C:\Users\laura.bolas\AppData\Local\ms-playwright\chromium_headless_shell-1223\...`. Ran `npx playwright install chromium`, then reran the exact E2E command successfully. Earlier E2E run also exposed root/client Vite resolution; fixed `e2e/helpers/e2eServer.js` to resolve Vite from `client/node_modules`.
+- Review result: Reviewed; selectors use labels, roles, and visible success/status text. The suite remains separate from Jest/Vitest and uses isolated seed resets per scenario.
+- Blockers: none
+- Next step: TASK-003
+
+### 2026-05-13 10:55 - ADD-ROLE-E2E TASK-003
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `e2e/helpers/apiHelpers.js`, `e2e/driver-trip.spec.js`, `e2e/admin-bookings.spec.js`, `client/src/pages/admin/AdminBookingsPage.jsx`, `_task/2026-05-13-add-role-e2e-tests.md`, `_progress/progress.md`, `_handoff/current.md`
+- Dirty worktree protection: TASK-003 edits were scoped to E2E helper/spec files, one non-visual accessible row label in the admin booking page, and workflow artifacts.
+- Acceptance result: `[x]` driver E2E happy path exists; `[x]` admin E2E happy path exists; `[x]` tests use isolated seeded credentials/data; `[x]` E2E suite runs separately.
+- Verification result: Initial targeted `npm run test:e2e -- e2e/driver-trip.spec.js e2e/admin-bookings.spec.js` had driver pass and admin fail on an overly broad row locator. After adding accessible booking row regions and updating selectors, the same command passed 2 tests. `cd client && npm test` passed 2 suites/3 tests. `cd client && npm run build` passed.
+- Failure recovery notes: Failing command was `npm run test:e2e -- e2e/driver-trip.spec.js e2e/admin-bookings.spec.js`; Playwright strict mode found two Reassign buttons inside the broad container locator. Classified in-scope test selector/accessibility issue. Fixed by adding `role="region"` and `aria-label` to admin booking rows and using `getByRole('region')`; reran exact failing command successfully.
+- Review result: Reviewed with `design-taste-frontend` pre-flight for the touched UI: global state unchanged, responsive layout/classes unchanged, no full-height sections added, no effects/animations added, existing loading/empty/error states preserved, no new cards or heavy animation introduced.
+- Blockers: none
+- Next step: TASK-004
+
+### 2026-05-13 11:15 - ADD-ROLE-E2E TASK-004
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `_task/2026-05-13-add-role-e2e-tests.md`, `_progress/progress.md`, `_handoff/current.md`, `_review/2026-05-13-add-role-e2e-tests.md`, `_release/2026-05-13-add-role-e2e-tests.md`, `_summary/2026-05-13-add-role-e2e-tests.md`, `docs/PROJECT_CONTEXT.md`
+- Dirty worktree protection: Final status shows only intentional source, test, package, docs, and workflow artifact changes for this E2E request.
+- Acceptance result: `[x]` required verification commands were run; `[x]` final review documents E2E limitations and local browser install recovery; `[x]` release notes and summary created; `[x]` workflow health marked Passed.
+- Verification result: `npm test` passed 3 suites/12 tests. `cd client && npm test` passed 2 suites/3 tests. `cd client && npm run build` passed. `npm run test:e2e` passed 4 tests. `npm run setup:e2e` completed successfully after the script was added. `git diff --stat`, `git diff -- . ':!package-lock.json'`, and `git status --short` completed.
+- Failure recovery notes: none during final verification. Earlier targeted recovery notes are recorded in TASK-001 through TASK-003.
+- Review result: Reviewed; final diff audit found no generated E2E output or secrets in the worktree.
+- Blockers: none
+- Next step: Final response.
