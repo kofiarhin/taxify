@@ -1,25 +1,29 @@
 # Active Work Request
 
-Add a separate Playwright browser E2E suite for Taxify with one happy path per role:
+Audit and fix the Tailwind configuration in `kofiarhin/taxify`.
 
-- Client books a ride from `/client/book`.
-- Driver accepts, starts, ends, and completes the cash-confirmation path.
-- Admin manages booking override/reassign controls from `/admin/bookings`.
-- Agent creates a walk-in booking from `/agent`.
+Requirements:
 
-Implementation requirements:
+- Find why Tailwind warns that `content` is missing or empty during Playwright/web server startup.
+- Ensure Tailwind scans all actual frontend source files.
+- Ensure production CSS purging works correctly.
+- Do not redesign styling.
+- Preserve existing build/test behavior.
 
-- Add Playwright E2E tests under `e2e/` or repo root.
-- Add Playwright config.
-- Add `test:e2e` and any necessary setup scripts.
-- Keep existing Jest/Vitest tests and frontend build working.
-- Use isolated deterministic test data.
-- Prefer API setup/teardown or direct test helpers where practical.
-- Do not use production services, commit secrets, add Socket.IO, redesign UI, or remove workflow artifacts.
+Expected config should include paths covering:
 
-Verification commands:
+- `client/src/**/*.{js,jsx,ts,tsx}`
+- `client/index.html`
+- any shared component/layout directories actually used
 
-- `npm test`
-- `cd client && npm test`
+Verification:
+
 - `cd client && npm run build`
 - `npm run test:e2e`
+- Confirm Tailwind warning no longer appears.
+
+Also:
+
+- Audit for duplicate or conflicting Tailwind configs at repo root vs `client/`.
+- Remove dead Tailwind config files if unused.
+- Update workflow artifacts and final diff audit.

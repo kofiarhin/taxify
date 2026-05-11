@@ -329,3 +329,29 @@ After appending each task entry, update `_handoff/current.md` with the latest cu
 - Review result: Reviewed; final diff audit found no generated E2E output or secrets in the worktree.
 - Blockers: none
 - Next step: Final response.
+
+### 2026-05-13 11:45 - TAILWIND-CONFIG TASK-001
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `WORK_REQUEST.md`, `client/tailwind.config.js`, `client/postcss.config.js`, `_spec/2026-05-13-fix-tailwind-content-config.md`, `_task/2026-05-13-fix-tailwind-content-config.md`
+- Dirty worktree protection: Initial `git status --short` was clean before workflow artifacts. Planned edits were config and workflow artifacts only; no user changes overlapped.
+- Acceptance result: `[x]` Tailwind scans `client/index.html`; `[x]` Tailwind scans `client/src/**/*.{js,jsx,ts,tsx}`; `[x]` shared components/layouts under `client/src/components` are covered; `[x]` production build passes; `[x]` root Playwright E2E passes; `[x]` missing/empty content warning is absent after the fix; `[x]` duplicate/conflicting configs audited.
+- Verification result: Reproduced warning with pre-fix `npm run test:e2e`, which passed 4 tests but printed Tailwind missing/empty `content` warnings. After the fix, `cd client && npm run build` passed and `npm run test:e2e` passed 4 tests with no Tailwind warning in the web-server output.
+- Failure recovery notes: First attempted fix using `content.relative: true` still allowed the warning during root E2E startup, showing the root web-server path was not consistently loading the client Tailwind config. Added an absolute `tailwindcss.config` path in `client/postcss.config.js`, reran build and E2E successfully.
+- Review result: Reviewed; changes are config-only, preserve theme extensions and plugins, add TypeScript glob coverage, and do not redesign styling.
+- Blockers: none
+- Next step: TASK-002
+
+### 2026-05-13 12:00 - TAILWIND-CONFIG TASK-002
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `_task/2026-05-13-fix-tailwind-content-config.md`, `_progress/progress.md`, `_handoff/current.md`, `_review/2026-05-13-fix-tailwind-content-config.md`, `_release/2026-05-13-fix-tailwind-content-config.md`, `_summary/2026-05-13-fix-tailwind-content-config.md`
+- Dirty worktree protection: Final dirty files are intentional Tailwind/PostCSS config changes plus workflow artifacts for this request.
+- Acceptance result: `[x]` final diff audit completed; `[x]` review file created; `[x]` release notes created; `[x]` summary created; `[x]` handoff updated; `[x]` workflow health recorded.
+- Verification result: `git diff --stat`, targeted `git diff`, and `git status --short` completed. Final implementation verification remains `cd client && npm run build` passed and `npm run test:e2e` passed without the Tailwind warning.
+- Failure recovery notes: none for closeout. TASK-001 records the failed first fix and successful targeted correction.
+- Review result: Reviewed; workflow health Passed.
+- Blockers: none
+- Next step: Final response.

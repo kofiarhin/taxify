@@ -4,11 +4,11 @@ This file is the live resume state for the active workflow. Keep it current afte
 
 ## Current Request
 
-Add a separate Playwright browser E2E suite for one happy path per Taxify role: client booking, driver trip lifecycle with cash confirmation, admin booking reassign/complete controls, and agent walk-in booking.
+Audit and fix Tailwind configuration so Tailwind scans real frontend source files, production CSS purging works, duplicate configs are audited, and the Playwright/web server startup warning about missing or empty `content` is removed.
 
 ## Request ID
 
-`2026-05-13-add-role-e2e-tests`
+`2026-05-13-fix-tailwind-content-config`
 
 ## Current Phase
 
@@ -20,27 +20,27 @@ Add a separate Playwright browser E2E suite for one happy path per Taxify role: 
 
 ## Current Spec File
 
-`_spec/2026-05-13-add-role-e2e-tests.md`
+`_spec/2026-05-13-fix-tailwind-content-config.md`
 
 ## Current Task Plan File
 
-`_task/2026-05-13-add-role-e2e-tests.md`
+`_task/2026-05-13-fix-tailwind-content-config.md`
 
 ## Current Review File
 
-`_review/2026-05-13-add-role-e2e-tests.md`
+`_review/2026-05-13-fix-tailwind-content-config.md`
 
 ## Current Release Notes File
 
-`_release/2026-05-13-add-role-e2e-tests.md`
+`_release/2026-05-13-fix-tailwind-content-config.md`
 
 ## Current Summary File
 
-`_summary/2026-05-13-add-role-e2e-tests.md`
+`_summary/2026-05-13-fix-tailwind-content-config.md`
 
 ## Last Completed Task
 
-`TASK-004: Run full verification and close workflow`
+`TASK-002: Close Tailwind config workflow`
 
 ## Current Task
 
@@ -52,11 +52,11 @@ Add a separate Playwright browser E2E suite for one happy path per Taxify role: 
 
 ## Dirty Worktree Status
 
-`Final dirty worktree contains only intentional source, test, package, docs, and workflow artifact changes for this E2E request. Generated Playwright output and transient E2E state were removed and ignored.`
+`Final dirty files are intentional Tailwind/PostCSS config changes plus workflow artifacts for this request.`
 
 ## Acceptance Status
 
-`complete: all TASK-001, TASK-002, TASK-003, and TASK-004 acceptance criteria checked`
+`complete: TASK-001 and TASK-002 acceptance criteria checked`
 
 ## Blockers
 
@@ -64,7 +64,7 @@ Add a separate Playwright browser E2E suite for one happy path per Taxify role: 
 
 ## Verification Status
 
-`passed: npm test; cd client && npm test; cd client && npm run build; npm run test:e2e; git diff --stat; git diff -- . ':!package-lock.json'; git status --short`
+`passed: cd client && npm run build; npm run test:e2e; git diff --stat; targeted git diff; git status --short. Pre-fix E2E reproduced Tailwind missing/empty content warning; post-fix E2E output did not include it.`
 
 ## Workflow Health Status
 
@@ -72,13 +72,10 @@ Add a separate Playwright browser E2E suite for one happy path per Taxify role: 
 
 ## Suggested Next Prompt
 
-`Review and commit the Playwright role E2E suite`
+`Review and commit the Tailwind config fix`
 
 ## Notes For Continuation
 
-- Playwright skill loaded; `npx` is available at `C:\Program Files\nodejs\npx.cmd`.
-- `design-taste-frontend` must be applied if frontend UI/accessibility files are changed.
-- Current implementation uses isolated MongoDB Memory Server and local Express/Vite servers for E2E.
-- `npm run test:e2e -- --list` returned nonzero before spec files existed; rerun after TASK-002/TASK-003 specs are added.
-- `npx playwright install chromium` was required once on this machine before browser tests could run; `npm run setup:e2e` is now available for that setup step.
-- Full `npm run test:e2e` now passes 4 browser tests.
+- Root cause: root-level Playwright startup caused Tailwind/PostCSS to miss or not consistently use the client Tailwind config; content paths also lacked TypeScript coverage.
+- Fix: `client/postcss.config.js` passes an absolute path to `client/tailwind.config.js`; `client/tailwind.config.js` uses `content.relative: true` and scans `./index.html` plus `./src/**/*.{js,jsx,ts,tsx}`.
+- Duplicate config audit found no root Tailwind/PostCSS config outside `node_modules`; no dead config files were removed.
