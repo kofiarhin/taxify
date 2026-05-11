@@ -4,11 +4,11 @@ This file is the live resume state for the active workflow. Keep it current afte
 
 ## Current Request
 
-Implement a production-readiness realtime dispatch layer using Socket.IO so clients, drivers, agents, and admins receive booking lifecycle updates without manual refresh.
+Finish and harden the Socket.IO realtime dispatch milestone with stable event contracts, reduced duplicate lifecycle emissions, consistent booking payload handling, backend lifecycle tests, frontend realtime tests, and cache update improvements.
 
 ## Request ID
 
-`2026-05-14-realtime-dispatch-socket-io`
+`2026-05-14-harden-realtime-dispatch-socket-io`
 
 ## Current Phase
 
@@ -20,27 +20,27 @@ Implement a production-readiness realtime dispatch layer using Socket.IO so clie
 
 ## Current Spec File
 
-`_spec/2026-05-14-realtime-dispatch-socket-io.md`
+`_spec/2026-05-14-harden-realtime-dispatch-socket-io.md`
 
 ## Current Task Plan File
 
-`_task/2026-05-14-realtime-dispatch-socket-io.md`
+`_task/2026-05-14-harden-realtime-dispatch-socket-io.md`
 
 ## Current Review File
 
-`_review/2026-05-14-realtime-dispatch-socket-io.md`
+`_review/2026-05-14-harden-realtime-dispatch-socket-io.md`
 
 ## Current Release Notes File
 
-`_release/2026-05-14-realtime-dispatch-socket-io.md`
+`_release/2026-05-14-harden-realtime-dispatch-socket-io.md`
 
 ## Current Summary File
 
-`_summary/2026-05-14-realtime-dispatch-socket-io.md`
+`_summary/2026-05-14-harden-realtime-dispatch-socket-io.md`
 
 ## Last Completed Task
 
-`TASK-005: Verify, review, and close workflow`
+`TASK-004: Run final verification and close workflow`
 
 ## Current Task
 
@@ -52,11 +52,11 @@ Implement a production-readiness realtime dispatch layer using Socket.IO so clie
 
 ## Dirty Worktree Status
 
-`Final dirty files are intentional realtime source, tests, package lockfiles, docs, and workflow artifacts for this request.`
+`Final dirty files are intentional realtime hardening source/test/docs files and workflow artifacts.`
 
 ## Acceptance Status
 
-`complete: TASK-001 through TASK-005 acceptance criteria checked`
+`complete: TASK-001 through TASK-004 acceptance criteria checked`
 
 ## Blockers
 
@@ -64,7 +64,7 @@ Implement a production-readiness realtime dispatch layer using Socket.IO so clie
 
 ## Verification Status
 
-`passed: npm test; cd client && npm test; cd client && npm run build; bounded npm run dev smoke; git diff --stat; targeted git diff; git status --short`
+`passed: npm test; npm run test --prefix client; git diff --stat; targeted git diff; git status --short`
 
 ## Workflow Health Status
 
@@ -72,16 +72,13 @@ Implement a production-readiness realtime dispatch layer using Socket.IO so clie
 
 ## Suggested Next Prompt
 
-`Review and commit the realtime dispatch Socket.IO layer`
+`Review and commit the realtime dispatch hardening changes`
 
 ## Notes For Continuation
 
-- User clarified that populated booking payloads should be included only when already available or cheap; otherwise emit minimal payload and let frontend invalidate/refetch.
-- Socket auth uses `User.status`; reject only explicit non-`ACTIVE`, while missing status remains accepted for legacy data.
-- Backend realtime module lives at `server/realtime/socket.js`.
-- TASK-001 installed root `socket.io` and root dev `socket.io-client` for socket auth integration tests.
-- Client runtime dependency `socket.io-client` was added under `client/`.
-- Lifecycle emissions were added to assignment, booking, and trip paths. Existing REST responses remain unchanged.
-- Client `SocketProvider` is wired inside `AppProviders`; `useRealtimeBookings` updates matching cached booking rows and invalidates booking queries for every booking lifecycle event.
-- AppShell shows connected/reconnecting/offline realtime status through `useSocket`.
-- Follow-up: consider a Socket.IO shared adapter before multi-instance backend deployment.
+- `server/realtime/bookingPayload.js` owns realtime booking serialization/population and strips internal auth fields.
+- Realtime payloads follow `{ type, bookingId, status, booking?, timestamp }` with string booking ids and ISO timestamps.
+- Booking creation emits one final `booking:created` after assignment resolves.
+- Reassignment emits one final `booking:reassigned`; driver rejection emits `booking:rejected` then the final assigned/queued outcome.
+- `useRealtimeBookings` now replaces or inserts payload bookings in cached booking lists, avoids duplicates, sorts newest-first when `createdAt` exists, and invalidates booking queries.
+- Full backend and frontend tests passed for this workflow.

@@ -21,16 +21,34 @@ export const BOOKING_REALTIME_EVENTS = [
 
 const bookingIdFor = (booking) => booking?._id || booking?.id;
 
+const sortNewestFirstWhenPossible = (bookings) => {
+  const hasCreatedAt = bookings.some((booking) => booking?.createdAt);
+  if (!hasCreatedAt) return bookings;
+
+  return [...bookings].sort((left, right) => {
+    const parsedLeftTime = left?.createdAt ? new Date(left.createdAt).getTime() : 0;
+    const parsedRightTime = right?.createdAt ? new Date(right.createdAt).getTime() : 0;
+    const leftTime = Number.isNaN(parsedLeftTime) ? 0 : parsedLeftTime;
+    const rightTime = Number.isNaN(parsedRightTime) ? 0 : parsedRightTime;
+    return rightTime - leftTime;
+  });
+};
+
 const updateBookingLists = (queryClient, updatedBooking) => {
   const updatedId = bookingIdFor(updatedBooking);
   if (!updatedId) return;
 
   queryClient.setQueriesData({ queryKey: queryKeys.bookings }, (data) => {
     if (!data?.bookings) return data;
+    const existingIndex = data.bookings.findIndex((booking) => bookingIdFor(booking) === updatedId);
+    const bookings =
+      existingIndex >= 0
+        ? data.bookings.map((booking, index) => (index === existingIndex ? updatedBooking : booking))
+        : [updatedBooking, ...data.bookings];
 
     return {
       ...data,
-      bookings: data.bookings.map((booking) => (bookingIdFor(booking) === updatedId ? updatedBooking : booking))
+      bookings: sortNewestFirstWhenPossible(bookings)
     };
   });
 };

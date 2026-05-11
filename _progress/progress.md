@@ -420,3 +420,55 @@ After appending each task entry, update `_handoff/current.md` with the latest cu
 - Review result: Reviewed; workflow health Passed.
 - Blockers: none
 - Next step: Final response.
+
+### 2026-05-14 10:15 - REALTIME-HARDEN TASK-001
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `WORK_REQUEST.md`, `_spec/2026-05-14-harden-realtime-dispatch-socket-io.md`, `_task/2026-05-14-harden-realtime-dispatch-socket-io.md`, `server/realtime/bookingPayload.js`, `server/realtime/socket.js`, `server/tests/socket.test.js`
+- Dirty worktree protection: Initial `git status --short` was clean before syncing this request; planned realtime backend/test files did not overlap with user edits.
+- Acceptance result: `[x]` stable payload contract implemented; `[x]` serialized booking payloads strip sensitive/internal auth fields; `[x]` socket auth tests pass.
+- Verification result: `npm test -- --runTestsByPath server/tests/socket.test.js` passed 1 suite/6 tests.
+- Failure recovery notes: none
+- Review result: Reviewed; payload builder normalizes `bookingId` and ISO timestamps and keeps REST serialization untouched.
+- Blockers: none
+- Next step: TASK-002
+
+### 2026-05-14 10:35 - REALTIME-HARDEN TASK-002
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `server/services/assignmentService.js`, `server/controllers/bookingController.js`, `server/controllers/tripController.js`, `server/realtime/socket.js`, `server/tests/dispatchLifecycle.test.js`, `_task/2026-05-14-harden-realtime-dispatch-socket-io.md`, `_progress/progress.md`, `_handoff/current.md`
+- Dirty worktree protection: Current dirty files are intentional realtime hardening files and workflow artifacts; no unrelated user changes appeared.
+- Acceptance result: `[x]` booking creation emits one final `booking:created`; `[x]` reassignment emits one final `booking:reassigned`; `[x]` driver rejection emits `booking:rejected` then one final assigned/queued outcome; `[x]` backend lifecycle/socket tests pass.
+- Verification result: `npm test -- --runTestsByPath server/tests/dispatchLifecycle.test.js server/tests/socket.test.js` passed 2 suites/14 tests.
+- Failure recovery notes: none
+- Review result: Reviewed; assignment suppression is opt-in for create/reassign only, rejection still publishes rejection plus the new final outcome, and REST response shapes remain unchanged.
+- Blockers: none
+- Next step: TASK-003
+
+### 2026-05-14 10:55 - REALTIME-HARDEN TASK-003
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `client/src/hooks/useRealtimeBookings.js`, `client/test/realtimeBookings.test.jsx`, `_task/2026-05-14-harden-realtime-dispatch-socket-io.md`, `_progress/progress.md`, `_handoff/current.md`
+- Dirty worktree protection: Current dirty files are intentional realtime hardening files and workflow artifacts; frontend edits were scoped to the realtime hook and tests.
+- Acceptance result: `[x]` all booking realtime events subscribe on mount; `[x]` handlers are removed on unmount; `[x]` matching cached booking updates; `[x]` new payload booking inserts without duplication; `[x]` booking queries invalidate; `[x]` socket helper tests pass.
+- Verification result: `npm run test --prefix client` passed 3 suites/9 tests.
+- Failure recovery notes: none
+- Review result: Reviewed with `design-taste-frontend` pre-flight: Redux remains limited to auth/UI state, server state remains TanStack Query, no layout or full-height UI changes were made, socket effects already include cleanup, no loading/empty/error states were removed, and no CPU-heavy animation or new card UI was introduced.
+- Blockers: none
+- Next step: TASK-004
+
+### 2026-05-14 11:20 - REALTIME-HARDEN TASK-004
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `_task/2026-05-14-harden-realtime-dispatch-socket-io.md`, `_progress/progress.md`, `_handoff/current.md`, `_review/2026-05-14-harden-realtime-dispatch-socket-io.md`, `_release/2026-05-14-harden-realtime-dispatch-socket-io.md`, `_summary/2026-05-14-harden-realtime-dispatch-socket-io.md`, `docs/PROJECT_CONTEXT.md`
+- Dirty worktree protection: Final dirty files are intentional realtime source/test/docs files and workflow artifacts for this hardening request.
+- Acceptance result: `[x]` required verification completed; `[x]` final diff audit completed; `[x]` workflow artifacts completed; `[x]` workflow health recorded.
+- Verification result: `npm test` passed 4 suites/20 tests. `npm run test --prefix client` passed 3 suites/9 tests after the final cache-sort edge-case patch. `git diff --stat`, targeted `git diff`, and `git status --short` completed.
+- Failure recovery notes: none
+- Review result: Reviewed; workflow health Passed.
+- Blockers: none
+- Next step: Final response.

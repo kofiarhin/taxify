@@ -4,7 +4,7 @@ import { render, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createSocketConnection, resolveSocketOrigin } from '../src/lib/socket';
-import { useRealtimeBookings } from '../src/hooks/useRealtimeBookings';
+import { BOOKING_REALTIME_EVENTS, useRealtimeBookings } from '../src/hooks/useRealtimeBookings';
 import { queryKeys } from '../src/hooks/queryKeys';
 import { SocketProvider } from '../src/realtime/SocketProvider';
 import { SocketContext } from '../src/realtime/socketContext';
@@ -49,6 +49,7 @@ describe('realtime booking integration', () => {
 
   test('creates socket connections with the auth token and resolved API origin', () => {
     expect(resolveSocketOrigin('http://localhost:5000/api', 'http://localhost:5173')).toBe('http://localhost:5000');
+    expect(resolveSocketOrigin('/api', 'https://app.taxify.test/bookings')).toBe('https://app.taxify.test');
     expect(createSocketConnection(null)).toBeNull();
 
     createSocketConnection('test-token', { origin: 'http://api.test' });
@@ -91,6 +92,32 @@ describe('realtime booking integration', () => {
     expect(socketMock.disconnect).toHaveBeenCalled();
   });
 
+  test('subscribes to booking lifecycle events and removes handlers on unmount', () => {
+    const socket = {
+      on: vi.fn(),
+      off: vi.fn()
+    };
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    });
+
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <SocketContext.Provider value={{ socket, status: 'connected' }}>
+          <HookHarness queryClient={queryClient} socket={socket} />
+        </SocketContext.Provider>
+      </QueryClientProvider>
+    );
+
+    expect(socket.on).toHaveBeenCalledTimes(BOOKING_REALTIME_EVENTS.length);
+    expect(socket.on.mock.calls.map((call) => call[0])).toEqual(BOOKING_REALTIME_EVENTS);
+
+    view.unmount();
+
+    expect(socket.off).toHaveBeenCalledTimes(BOOKING_REALTIME_EVENTS.length);
+    expect(socket.off.mock.calls.map((call) => call[0])).toEqual(BOOKING_REALTIME_EVENTS);
+  });
+
   test('updates cached bookings and invalidates booking queries for lifecycle events', () => {
     const handlers = {};
     const socket = {
@@ -107,8 +134,8 @@ describe('realtime booking integration', () => {
 
     queryClient.setQueryData(queryKey, {
       bookings: [
-        { _id: 'booking-1', status: 'QUEUED', pickupAddress: 'Old pickup' },
-        { _id: 'booking-2', status: 'QUEUED', pickupAddress: 'Other pickup' }
+        { _id: 'booking-1', status: 'QUEUED', pickupAddress: 'Old pickup', createdAt: '2026-05-14T09:00:00.000Z' },
+        { _id: 'booking-2', status: 'QUEUED', pickupAddress: 'Other pickup', createdAt: '2026-05-14T08:00:00.000Z' }
       ]
     });
 
@@ -124,7 +151,12 @@ describe('realtime booking integration', () => {
       type: 'booking:assigned',
       bookingId: 'booking-1',
       status: 'DRIVER_ASSIGNED',
-      booking: { _id: 'booking-1', status: 'DRIVER_ASSIGNED', pickupAddress: 'New pickup' },
+      booking: {
+        _id: 'booking-1',
+        status: 'DRIVER_ASSIGNED',
+        pickupAddress: 'New pickup',
+        createdAt: '2026-05-14T09:00:00.000Z'
+      },
       timestamp: new Date().toISOString()
     });
 
@@ -132,5 +164,44 @@ describe('realtime booking integration', () => {
       expect.objectContaining({ _id: 'booking-1', status: 'DRIVER_ASSIGNED', pickupAddress: 'New pickup' })
     );
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.bookings });
+  });
+
+  test('inserts new realtime bookings into cached lists without duplicating them', () => {
+    const handlers = {};
+    const socket = {
+      on: vi.fn((event, handler) => {
+        handlers[event] = handler;
+      }),
+      off: vi.fn()
+    };
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    });
+    const queryKey = [...queryKeys.bookings, undefined];
+
+    queryClient.setQueryData(queryKey, {
+      bookings: [{ _id: 'booking-1', status: 'QUEUED', createdAt: '2026-05-14T09:00:00.000Z' }]
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SocketContext.Provider value={{ socket, status: 'connected' }}>
+          <HookHarness queryClient={queryClient} socket={socket} />
+        </SocketContext.Provider>
+      </QueryClientProvider>
+    );
+
+    const payload = {
+      type: 'booking:created',
+      bookingId: 'booking-3',
+      status: 'DRIVER_ASSIGNED',
+      booking: { _id: 'booking-3', status: 'DRIVER_ASSIGNED', createdAt: '2026-05-14T10:00:00.000Z' },
+      timestamp: new Date().toISOString()
+    };
+
+    handlers['booking:created'](payload);
+    handlers['booking:created'](payload);
+
+    expect(queryClient.getQueryData(queryKey).bookings.map((booking) => booking._id)).toEqual(['booking-3', 'booking-1']);
   });
 });

@@ -1,4 +1,6 @@
 const request = require('supertest');
+const http = require('http');
+const { io: createSocketClient } = require('socket.io-client');
 const app = require('../app');
 const AssignmentAttempt = require('../models/AssignmentAttempt');
 const Booking = require('../models/Booking');
@@ -7,11 +9,64 @@ const DriverProfile = require('../models/DriverProfile');
 const { ROLES } = require('../constants/roles');
 const { BOOKING_STATUS, DRIVER_STATUS } = require('../constants/statuses');
 const realtime = require('../realtime/socket');
+const { signToken } = require('../services/authService');
 const { authHeader, createDriver, createUser } = require('./helpers/testUtils');
 
+const listen = (server) => new Promise((resolve) => server.listen(0, resolve));
+const closeServer = (server) => new Promise((resolve) => server.close(resolve));
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+const waitForRoom = async (socket, room) => {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (socket.rooms.has(room)) return;
+    await tick();
+  }
+  throw new Error(`Socket did not join ${room}`);
+};
+
+const startRealtimeServer = async () => {
+  const server = http.createServer(app);
+  const io = realtime.initializeSocketServer(server);
+  await listen(server);
+  const url = `http://localhost:${server.address().port}`;
+
+  const close = async () => {
+    await new Promise((resolve) => io.close(resolve));
+    await closeServer(server);
+    realtime.resetSocketServerForTests();
+  };
+
+  return { close, io, url };
+};
+
+const connectRealtimeClient = (url, user) =>
+  createSocketClient(url, {
+    auth: { token: signToken(user) },
+    forceNew: true,
+    reconnection: false,
+    transports: ['websocket']
+  });
+
+const waitForConnect = (socket) =>
+  new Promise((resolve, reject) => {
+    socket.once('connect', resolve);
+    socket.once('connect_error', reject);
+  });
+
 describe('dispatch lifecycle', () => {
+  const sockets = [];
+  let realtimeServer;
+
   afterEach(() => {
+    sockets.forEach((socket) => socket.disconnect());
+    sockets.length = 0;
     jest.restoreAllMocks();
+  });
+
+  afterEach(async () => {
+    if (realtimeServer) {
+      await realtimeServer.close();
+      realtimeServer = null;
+    }
   });
 
   test('booking queues when no driver is active', async () => {
@@ -25,8 +80,63 @@ describe('dispatch lifecycle', () => {
       .expect(201);
 
     expect(response.body.booking.status).toBe(BOOKING_STATUS.QUEUED);
-    expect(emitSpy).toHaveBeenCalledWith(expect.anything(), 'booking:queued');
     expect(emitSpy).toHaveBeenCalledWith(expect.anything(), 'booking:created');
+    expect(emitSpy.mock.calls.map((call) => call[1])).toEqual(['booking:created']);
+  });
+
+  test('booking creation emits one final populated payload to admin, client, and assigned driver rooms', async () => {
+    const admin = await createUser({ role: ROLES.ADMIN, email: 'admin-realtime@test.local', name: 'Mara Ellison' });
+    const client = await createUser({ role: ROLES.CLIENT, email: 'client-realtime@test.local', name: 'Nico Ibarra' });
+    const { user: driverUser, profile } = await createDriver();
+    realtimeServer = await startRealtimeServer();
+
+    const serverSockets = [];
+    realtimeServer.io.on('connection', (socket) => serverSockets.push(socket));
+
+    const adminSocket = connectRealtimeClient(realtimeServer.url, admin);
+    const clientSocket = connectRealtimeClient(realtimeServer.url, client);
+    const driverSocket = connectRealtimeClient(realtimeServer.url, driverUser);
+    sockets.push(adminSocket, clientSocket, driverSocket);
+
+    await Promise.all([waitForConnect(adminSocket), waitForConnect(clientSocket), waitForConnect(driverSocket)]);
+    for (let attempt = 0; attempt < 20 && serverSockets.length < 3; attempt += 1) {
+      await tick();
+    }
+    await waitForRoom(serverSockets.find((socket) => socket.user._id.toString() === admin._id.toString()), `role:${ROLES.ADMIN}`);
+    await waitForRoom(serverSockets.find((socket) => socket.user._id.toString() === client._id.toString()), `user:${client._id.toString()}`);
+    await waitForRoom(serverSockets.find((socket) => socket.user._id.toString() === driverUser._id.toString()), `driver:${profile._id.toString()}`);
+
+    const adminEvent = new Promise((resolve) => adminSocket.once('booking:created', resolve));
+    const clientEvent = new Promise((resolve) => clientSocket.once('booking:created', resolve));
+    const driverEvent = new Promise((resolve) => driverSocket.once('booking:created', resolve));
+
+    const response = await request(app)
+      .post('/api/bookings')
+      .set(authHeader(client))
+      .send({ pickupAddress: '11 River Street', dropoffAddress: '82 Mason Avenue' })
+      .expect(201);
+
+    expect(response.body.booking.status).toBe(BOOKING_STATUS.DRIVER_ASSIGNED);
+
+    const received = await Promise.all([adminEvent, clientEvent, driverEvent]);
+    for (const payload of received) {
+      expect(payload).toEqual(
+        expect.objectContaining({
+          type: 'booking:created',
+          bookingId: response.body.booking._id,
+          status: BOOKING_STATUS.DRIVER_ASSIGNED,
+          timestamp: expect.any(String)
+        })
+      );
+      expect(payload.booking.client).toEqual(
+        expect.objectContaining({ _id: client._id.toString(), name: 'Nico Ibarra', email: 'client-realtime@test.local' })
+      );
+      expect(payload.booking.assignedDriver.user).toEqual(
+        expect.objectContaining({ _id: driverUser._id.toString(), email: driverUser.email })
+      );
+      expect(payload.booking.client.passwordHash).toBeUndefined();
+      expect(payload.booking.assignedDriver.user.passwordHash).toBeUndefined();
+    }
   });
 
   test('booking validation returns 400 for blank address input', async () => {
@@ -125,7 +235,6 @@ describe('dispatch lifecycle', () => {
     expect(completedIndex).toBeGreaterThan(paidIndex);
     expect(emitSpy.mock.calls.map((call) => call[1])).toEqual(
       expect.arrayContaining([
-        'booking:assigned',
         'booking:created',
         'booking:accepted',
         'trip:started',
@@ -135,12 +244,14 @@ describe('dispatch lifecycle', () => {
         'booking:completed'
       ])
     );
+    expect(emitSpy.mock.calls.filter((call) => call[1] === 'booking:assigned')).toHaveLength(0);
   });
 
   test('driver rejection reassigns booking to another available driver first', async () => {
     const client = await createUser({ role: ROLES.CLIENT, email: 'client-reject@test.local', name: 'Nico Ibarra' });
     const first = await createDriver();
     const second = await createDriver();
+    const emitSpy = jest.spyOn(realtime, 'emitBookingEvent');
 
     const created = await request(app)
       .post('/api/bookings')
@@ -159,6 +270,36 @@ describe('dispatch lifecycle', () => {
     expect(rejected.body.booking.assignedDriver.toString()).toBe(second.profile._id.toString());
     expect((await DriverProfile.findById(first.profile._id)).lifecycleStatus).toBe(DRIVER_STATUS.ACTIVE);
     expect((await DriverProfile.findById(second.profile._id)).lifecycleStatus).toBe(DRIVER_STATUS.ASSIGNED);
+    expect(emitSpy.mock.calls.map((call) => call[1])).toEqual([
+      'booking:created',
+      'booking:rejected',
+      'booking:assigned'
+    ]);
+  });
+
+  test('admin reassignment emits one final reassigned event', async () => {
+    const admin = await createUser({ role: ROLES.ADMIN, email: 'admin-reassign@test.local', name: 'Mara Ellison' });
+    const client = await createUser({ role: ROLES.CLIENT, email: 'client-reassign@test.local', name: 'Nico Ibarra' });
+    const first = await createDriver();
+    const second = await createDriver();
+    const emitSpy = jest.spyOn(realtime, 'emitBookingEvent');
+
+    const created = await request(app)
+      .post('/api/bookings')
+      .set(authHeader(client))
+      .send({ pickupAddress: '14 South Arcade', dropoffAddress: '77 Brook Terrace' })
+      .expect(201);
+
+    expect(created.body.booking.assignedDriver._id).toBe(first.profile._id.toString());
+
+    const reassigned = await request(app)
+      .post(`/api/bookings/${created.body.booking._id}/reassign`)
+      .set(authHeader(admin))
+      .expect(200);
+
+    expect(reassigned.body.booking.status).toBe(BOOKING_STATUS.DRIVER_ASSIGNED);
+    expect(reassigned.body.booking.assignedDriver._id).toBe(second.profile._id.toString());
+    expect(emitSpy.mock.calls.map((call) => call[1])).toEqual(['booking:created', 'booking:reassigned']);
   });
 
   test('driver cannot confirm cash before client confirms completion', async () => {

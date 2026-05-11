@@ -37,7 +37,7 @@ const accept = asyncHandler(async (req, res) => {
   await booking.save();
   profile.lifecycleStatus = DRIVER_STATUS.ASSIGNED;
   await profile.save();
-  realtime.emitBookingEvent(booking, 'booking:accepted');
+  await realtime.emitPopulatedBookingEvent(booking, 'booking:accepted');
   res.json({ booking });
 });
 
@@ -65,7 +65,7 @@ const start = asyncHandler(async (req, res) => {
     { booking: booking._id, driver: profile._id, startedAt: booking.startedAt },
     { upsert: true, new: true }
   );
-  realtime.emitBookingEvent(booking, 'trip:started');
+  await realtime.emitPopulatedBookingEvent(booking, 'trip:started');
   res.json({ booking });
 });
 
@@ -95,7 +95,7 @@ const end = asyncHandler(async (req, res) => {
     },
     { upsert: true, new: true }
   );
-  realtime.emitBookingEvent(booking, 'trip:ended');
+  await realtime.emitPopulatedBookingEvent(booking, 'trip:ended');
   res.json({ booking });
 });
 
@@ -115,7 +115,7 @@ const confirmClient = asyncHandler(async (req, res) => {
   booking.payment.status = 'CLIENT_CONFIRMED';
   booking.payment.clientConfirmedAt = new Date();
   await booking.save();
-  realtime.emitBookingEvent(booking, 'payment:client_confirmed');
+  await realtime.emitPopulatedBookingEvent(booking, 'payment:client_confirmed');
   res.json({ booking });
 });
 
@@ -127,8 +127,8 @@ const confirmPayment = asyncHandler(async (req, res) => {
   const completed = await finalizePaidBooking(booking, { actor: req.user._id, note: 'Driver confirmed cash payment' });
   profile.lifecycleStatus = DRIVER_STATUS.ACTIVE;
   await profile.save();
-  realtime.emitBookingEvent(completed, 'payment:driver_confirmed');
-  realtime.emitBookingEvent(completed, 'booking:completed');
+  await realtime.emitPopulatedBookingEvent(completed, 'payment:driver_confirmed');
+  await realtime.emitPopulatedBookingEvent(completed, 'booking:completed');
   res.json({ booking: completed });
 });
 

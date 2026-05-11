@@ -44,8 +44,10 @@ const createBooking = asyncHandler(async (req, res) => {
   });
 
   setBookingStatus(booking, BOOKING_STATUS.PENDING_ASSIGNMENT, { actor: req.user._id, note: 'Booking created' });
-  await assignAvailableDriver(booking);
+  await assignAvailableDriver(booking, { actor: req.user._id, suppressRealtime: true });
   const hydrated = await populateBooking(Booking.findById(booking._id));
+  // Creation emits one final useful state after assignment resolves to avoid
+  // duplicate cache churn from immediate assigned/queued events.
   realtime.emitBookingEvent(hydrated, 'booking:created');
   res.status(201).json({ booking: hydrated });
 });
@@ -114,7 +116,7 @@ const cancelBooking = asyncHandler(async (req, res) => {
   setBookingStatus(booking, BOOKING_STATUS.CANCELLED, { actor: req.user._id, note: 'Booking cancelled' });
   booking.cancelledAt = new Date();
   await booking.save();
-  realtime.emitBookingEvent(booking, 'booking:cancelled');
+  await realtime.emitPopulatedBookingEvent(booking, 'booking:cancelled');
   res.json({ booking });
 });
 
@@ -124,7 +126,7 @@ const disputeBooking = asyncHandler(async (req, res) => {
   setBookingStatus(booking, BOOKING_STATUS.DISPUTED, { actor: req.user._id, note: 'Booking disputed' });
   booking.disputedAt = new Date();
   await booking.save();
-  realtime.emitBookingEvent(booking, 'booking:disputed');
+  await realtime.emitPopulatedBookingEvent(booking, 'booking:disputed');
   res.json({ booking });
 });
 

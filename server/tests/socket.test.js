@@ -158,4 +158,34 @@ describe('realtime socket server', () => {
     );
     expect(received.booking.passengerName).toBe('Mira Sutton');
   });
+
+  it('builds normalized booking payloads without internal auth fields', async () => {
+    const user = await createUser({ role: ROLES.CLIENT, email: 'payload-client@test.local', name: 'Iris Camden' });
+    const booking = await Booking.create({
+      client: user._id,
+      createdBy: user._id,
+      source: 'CLIENT_APP',
+      passengerName: 'Iris Camden',
+      passengerPhone: '+1 (312) 847-1928',
+      pickupAddress: '31 Union Plaza',
+      dropoffAddress: '9 Grove Walk'
+    });
+
+    const payload = buildBookingPayload(booking, 'booking:created', {
+      bookingId: booking._id,
+      timestamp: new Date('2026-05-14T10:15:30.000Z')
+    });
+
+    expect(payload).toEqual(
+      expect.objectContaining({
+        type: 'booking:created',
+        bookingId: booking._id.toString(),
+        status: booking.status,
+        timestamp: '2026-05-14T10:15:30.000Z'
+      })
+    );
+    expect(typeof payload.bookingId).toBe('string');
+    expect(payload.booking.passwordHash).toBeUndefined();
+    expect(payload.booking.__v).toBeUndefined();
+  });
 });

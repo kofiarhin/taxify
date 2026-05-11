@@ -57,6 +57,7 @@ none configured
 - State management conventions: Redux Toolkit stores auth/client UI state; TanStack Query handles server state through custom hooks.
 - Error handling conventions: centralized Express error middleware returns `{ error: { code, message } }`.
 - Booking lifecycle conventions: current status lives on `Booking.status`; audited transitions are appended to `Booking.statusHistory`; realtime booking events use Socket.IO rooms for role, user, and driver-profile delivery.
+- Realtime booking event payloads use the stable contract `{ type, bookingId, status, booking?, timestamp }`; important lifecycle emissions populate client, creator, and assigned-driver user fields where practical.
 
 ## Architecture Rules
 

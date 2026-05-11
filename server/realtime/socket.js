@@ -4,28 +4,15 @@ const env = require('../config/env');
 const { ROLES } = require('../constants/roles');
 const DriverProfile = require('../models/DriverProfile');
 const User = require('../models/User');
+const {
+  buildBookingPayload,
+  populateBookingForRealtime,
+  toId
+} = require('./bookingPayload');
 
 let io;
 
 const isActiveSocketUser = (user) => !user.status || user.status === 'ACTIVE';
-
-const toId = (value) => value?._id?.toString?.() || value?.toString?.();
-
-const serializeBooking = (booking) => {
-  if (!booking) return undefined;
-  if (typeof booking.toSafeObject === 'function') return booking.toSafeObject();
-  if (typeof booking.toObject === 'function') return booking.toObject({ virtuals: false });
-  return booking;
-};
-
-const buildBookingPayload = (booking, event, payload = {}) => ({
-  type: payload.type || event,
-  bookingId: payload.bookingId || toId(booking),
-  status: payload.status || booking?.status,
-  ...(payload.booking || booking ? { booking: payload.booking || serializeBooking(booking) } : {}),
-  ...payload,
-  timestamp: payload.timestamp || new Date().toISOString()
-});
 
 const requireIo = () => io;
 
@@ -57,6 +44,11 @@ const emitBookingEvent = (booking, event, payload = {}) => {
   if (driverId) emitToDriver(driverId, event, eventPayload);
 
   return eventPayload;
+};
+
+const emitPopulatedBookingEvent = async (booking, event, payload = {}) => {
+  const hydrated = await populateBookingForRealtime(booking);
+  return module.exports.emitBookingEvent(hydrated || booking, event, payload);
 };
 
 const authenticateSocket = async (socket, next) => {
@@ -120,6 +112,7 @@ const resetSocketServerForTests = () => {
 module.exports = {
   buildBookingPayload,
   emitBookingEvent,
+  emitPopulatedBookingEvent,
   emitToAdmins,
   emitToAgents,
   emitToDriver,
