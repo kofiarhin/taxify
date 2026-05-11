@@ -4,11 +4,11 @@ This file is the live resume state for the active workflow. Keep it current afte
 
 ## Current Request
 
-Audit and fix Tailwind configuration so Tailwind scans real frontend source files, production CSS purging works, duplicate configs are audited, and the Playwright/web server startup warning about missing or empty `content` is removed.
+Implement a production-readiness realtime dispatch layer using Socket.IO so clients, drivers, agents, and admins receive booking lifecycle updates without manual refresh.
 
 ## Request ID
 
-`2026-05-13-fix-tailwind-content-config`
+`2026-05-14-realtime-dispatch-socket-io`
 
 ## Current Phase
 
@@ -20,27 +20,27 @@ Audit and fix Tailwind configuration so Tailwind scans real frontend source file
 
 ## Current Spec File
 
-`_spec/2026-05-13-fix-tailwind-content-config.md`
+`_spec/2026-05-14-realtime-dispatch-socket-io.md`
 
 ## Current Task Plan File
 
-`_task/2026-05-13-fix-tailwind-content-config.md`
+`_task/2026-05-14-realtime-dispatch-socket-io.md`
 
 ## Current Review File
 
-`_review/2026-05-13-fix-tailwind-content-config.md`
+`_review/2026-05-14-realtime-dispatch-socket-io.md`
 
 ## Current Release Notes File
 
-`_release/2026-05-13-fix-tailwind-content-config.md`
+`_release/2026-05-14-realtime-dispatch-socket-io.md`
 
 ## Current Summary File
 
-`_summary/2026-05-13-fix-tailwind-content-config.md`
+`_summary/2026-05-14-realtime-dispatch-socket-io.md`
 
 ## Last Completed Task
 
-`TASK-002: Close Tailwind config workflow`
+`TASK-005: Verify, review, and close workflow`
 
 ## Current Task
 
@@ -52,11 +52,11 @@ Audit and fix Tailwind configuration so Tailwind scans real frontend source file
 
 ## Dirty Worktree Status
 
-`Final dirty files are intentional Tailwind/PostCSS config changes plus workflow artifacts for this request.`
+`Final dirty files are intentional realtime source, tests, package lockfiles, docs, and workflow artifacts for this request.`
 
 ## Acceptance Status
 
-`complete: TASK-001 and TASK-002 acceptance criteria checked`
+`complete: TASK-001 through TASK-005 acceptance criteria checked`
 
 ## Blockers
 
@@ -64,7 +64,7 @@ Audit and fix Tailwind configuration so Tailwind scans real frontend source file
 
 ## Verification Status
 
-`passed: cd client && npm run build; npm run test:e2e; git diff --stat; targeted git diff; git status --short. Pre-fix E2E reproduced Tailwind missing/empty content warning; post-fix E2E output did not include it.`
+`passed: npm test; cd client && npm test; cd client && npm run build; bounded npm run dev smoke; git diff --stat; targeted git diff; git status --short`
 
 ## Workflow Health Status
 
@@ -72,10 +72,16 @@ Audit and fix Tailwind configuration so Tailwind scans real frontend source file
 
 ## Suggested Next Prompt
 
-`Review and commit the Tailwind config fix`
+`Review and commit the realtime dispatch Socket.IO layer`
 
 ## Notes For Continuation
 
-- Root cause: root-level Playwright startup caused Tailwind/PostCSS to miss or not consistently use the client Tailwind config; content paths also lacked TypeScript coverage.
-- Fix: `client/postcss.config.js` passes an absolute path to `client/tailwind.config.js`; `client/tailwind.config.js` uses `content.relative: true` and scans `./index.html` plus `./src/**/*.{js,jsx,ts,tsx}`.
-- Duplicate config audit found no root Tailwind/PostCSS config outside `node_modules`; no dead config files were removed.
+- User clarified that populated booking payloads should be included only when already available or cheap; otherwise emit minimal payload and let frontend invalidate/refetch.
+- Socket auth uses `User.status`; reject only explicit non-`ACTIVE`, while missing status remains accepted for legacy data.
+- Backend realtime module lives at `server/realtime/socket.js`.
+- TASK-001 installed root `socket.io` and root dev `socket.io-client` for socket auth integration tests.
+- Client runtime dependency `socket.io-client` was added under `client/`.
+- Lifecycle emissions were added to assignment, booking, and trip paths. Existing REST responses remain unchanged.
+- Client `SocketProvider` is wired inside `AppProviders`; `useRealtimeBookings` updates matching cached booking rows and invalidates booking queries for every booking lifecycle event.
+- AppShell shows connected/reconnecting/offline realtime status through `useSocket`.
+- Follow-up: consider a Socket.IO shared adapter before multi-instance backend deployment.

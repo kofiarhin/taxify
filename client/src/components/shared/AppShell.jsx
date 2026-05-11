@@ -2,6 +2,7 @@ import { Car, ChartBar, ClipboardText, CurrencyDollar, Gauge, ListChecks, SignOu
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { clearCredentials } from '../../redux/auth/authSlice';
+import { useSocket } from '../../realtime/socketContext';
 
 const navByRole = {
   ADMIN: [
@@ -27,11 +28,31 @@ const navByRole = {
   ]
 };
 
+const realtimeState = {
+  connected: {
+    label: 'Realtime connected',
+    className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    dotClassName: 'bg-emerald-500'
+  },
+  reconnecting: {
+    label: 'Realtime reconnecting',
+    className: 'border-amber-200 bg-amber-50 text-amber-700',
+    dotClassName: 'bg-amber-500'
+  },
+  offline: {
+    label: 'Realtime offline',
+    className: 'border-slate-200 bg-slate-100 text-slate-600',
+    dotClassName: 'bg-slate-400'
+  }
+};
+
 export function AppShell() {
   const { user } = useSelector((state) => state.auth);
+  const { status } = useSocket();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const links = navByRole[user?.role] || [];
+  const currentRealtime = realtimeState[status] || realtimeState.offline;
 
   const logout = () => {
     dispatch(clearCredentials());
@@ -47,6 +68,14 @@ export function AppShell() {
             <h1 className="text-xl font-bold tracking-tight text-slate-950">{user?.role?.toLowerCase()} console</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <div
+              className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-xs font-semibold ${currentRealtime.className}`}
+              aria-label={currentRealtime.label}
+              role="status"
+            >
+              <span className={`h-2 w-2 rounded-full ${currentRealtime.dotClassName}`} aria-hidden="true" />
+              <span>{currentRealtime.label}</span>
+            </div>
             {links.map(([label, to, Icon]) => (
               <NavLink
                 key={to}

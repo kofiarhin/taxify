@@ -355,3 +355,68 @@ After appending each task entry, update `_handoff/current.md` with the latest cu
 - Review result: Reviewed; workflow health Passed.
 - Blockers: none
 - Next step: Final response.
+
+### 2026-05-14 00:00 - REALTIME-DISPATCH TASK-001
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `package.json`, `package-lock.json`, `server/server.js`, `server/realtime/socket.js`, `server/tests/socket.test.js`, `WORK_REQUEST.md`, `_spec/2026-05-14-realtime-dispatch-socket-io.md`, `_task/2026-05-14-realtime-dispatch-socket-io.md`
+- Dirty worktree protection: Initial `git status --short` was clean before syncing this request; current dirty files are intentional backend Socket.IO dependency/server/test changes and workflow artifacts.
+- Acceptance result: `[x]` socket auth rejection and acceptance verified; `[x]` helper emissions verified; `[x]` existing REST app behavior preserved by full backend test pass.
+- Verification result: `npm test -- --runTestsByPath server/tests/socket.test.js` passed 1 suite/5 tests after a test-only race fix; `npm test` passed 4 suites/17 tests.
+- Failure recovery notes: Initial targeted socket test failed because the driver room assertion raced the async DriverProfile room join. Classified as in-scope test harness timing. Fixed the test to wait for the driver room and reran the exact command successfully.
+- Review result: Reviewed; backend runtime dependency is `socket.io`, root test-only client dependency is `socket.io-client`, socket auth follows JWT/User status rules, and helper payload shape is covered.
+- Blockers: none
+- Next step: TASK-002
+
+### 2026-05-14 00:00 - REALTIME-DISPATCH TASK-002
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `server/services/assignmentService.js`, `server/controllers/bookingController.js`, `server/controllers/tripController.js`, `server/tests/dispatchLifecycle.test.js`, `_task/2026-05-14-realtime-dispatch-socket-io.md`, `_progress/progress.md`, `_handoff/current.md`
+- Dirty worktree protection: Current dirty files remain intentional realtime implementation files and workflow artifacts; no unrelated user changes appeared.
+- Acceptance result: `[x]` booking create events verified; `[x]` driver lifecycle events verified; `[x]` payment lifecycle events verified; `[x]` REST shape remains backward compatible by existing API test pass.
+- Verification result: `npm test -- --runTestsByPath server/tests/dispatchLifecycle.test.js server/tests/socket.test.js` passed 2 suites/11 tests. `npm test` passed 4 suites/17 tests.
+- Failure recovery notes: none
+- Review result: Reviewed; emissions sit beside existing lifecycle changes, use populated booking only where already hydrated, and do not rename statuses or alter REST response shapes.
+- Blockers: none
+- Next step: TASK-003
+
+### 2026-05-14 00:00 - REALTIME-DISPATCH TASK-003
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `client/package.json`, `client/package-lock.json`, `client/src/lib/socket.js`, `client/src/realtime/socketContext.js`, `client/src/realtime/SocketProvider.jsx`, `client/src/hooks/useRealtimeBookings.js`, `client/src/redux/providers.jsx`, `client/test/realtimeBookings.test.jsx`, `_task/2026-05-14-realtime-dispatch-socket-io.md`
+- Dirty worktree protection: Current dirty files are intentional realtime dependency, source, test, and workflow changes.
+- Acceptance result: `[x]` client socket auth token behavior verified; `[x]` booking query invalidation/update verified; `[x]` provider wiring verified.
+- Verification result: Initial `cd client && npm test` failed because the Vitest `socket.io-client` mock referenced a top-level variable before hoisting completed. Fixed with `vi.hoisted`; reran `cd client && npm test` successfully. Final frontend test run passed 3 suites/6 tests.
+- Failure recovery notes: Failing command was `cd client && npm test`; captured error was `Cannot access 'ioMock' before initialization`. Classified in-scope test mock setup. Fixed the mock and reran exact command successfully.
+- Review result: Reviewed; socket connection logic stays in `lib/` and provider/hook modules, booking server state remains in TanStack Query, and page components were not given API/socket logic.
+- Blockers: none
+- Next step: TASK-004
+
+### 2026-05-14 00:00 - REALTIME-DISPATCH TASK-004
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `client/src/components/shared/AppShell.jsx`, `client/test/App.test.jsx`, `_task/2026-05-14-realtime-dispatch-socket-io.md`, `_progress/progress.md`, `_handoff/current.md`
+- Dirty worktree protection: Current dirty files are intentional realtime UI/test/source/package/workflow changes.
+- Acceptance result: `[x]` indicator states implemented; `[x]` frontend tests pass; `[x]` design pre-flight completed.
+- Verification result: `cd client && npm test` passed 3 suites/7 tests. `cd client && npm run build` passed.
+- Failure recovery notes: none
+- Review result: Reviewed with `design-taste-frontend` pre-flight: Redux remains auth/UI only, server state remains TanStack Query, header flex-wrap preserves mobile layout, no `h-screen`, socket effects include cleanup, no CPU-heavy animation, no nested card redesign, and existing loading/empty/error UI remains unchanged.
+- Blockers: none
+- Next step: TASK-005
+
+### 2026-05-14 00:00 - REALTIME-DISPATCH TASK-005
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `_task/2026-05-14-realtime-dispatch-socket-io.md`, `_progress/progress.md`, `_handoff/current.md`, `_review/2026-05-14-realtime-dispatch-socket-io.md`, `_release/2026-05-14-realtime-dispatch-socket-io.md`, `_summary/2026-05-14-realtime-dispatch-socket-io.md`, `docs/PROJECT_CONTEXT.md`
+- Dirty worktree protection: Final dirty files are intentional realtime source, tests, package lockfiles, docs, and workflow artifacts.
+- Acceptance result: `[x]` final verification completed; `[x]` workflow artifacts completed; `[x]` health check recorded.
+- Verification result: `npm test` passed 4 suites/17 tests. `cd client && npm test` passed 3 suites/7 tests. `cd client && npm run build` passed. Bounded `npm run dev` smoke started Vite on port 5173 and API on port 5000 before stopping the process tree. `git diff --stat`, targeted `git diff`, and `git status --short` completed.
+- Failure recovery notes: none during final closeout. Earlier task recovery notes remain recorded in TASK-001 and TASK-003.
+- Review result: Reviewed; workflow health Passed.
+- Blockers: none
+- Next step: Final response.

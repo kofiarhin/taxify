@@ -6,6 +6,7 @@ const CommissionStatement = require('../models/CommissionStatement');
 const DriverProfile = require('../models/DriverProfile');
 const { ROLES } = require('../constants/roles');
 const { BOOKING_STATUS, DRIVER_STATUS } = require('../constants/statuses');
+const realtime = require('../realtime/socket');
 const { authHeader, createDriver, createUser } = require('./helpers/testUtils');
 
 describe('dispatch lifecycle', () => {
@@ -15,6 +16,7 @@ describe('dispatch lifecycle', () => {
 
   test('booking queues when no driver is active', async () => {
     const client = await createUser({ role: ROLES.CLIENT, email: 'client-queue@test.local', name: 'Nico Ibarra' });
+    const emitSpy = jest.spyOn(realtime, 'emitBookingEvent');
 
     const response = await request(app)
       .post('/api/bookings')
@@ -23,6 +25,8 @@ describe('dispatch lifecycle', () => {
       .expect(201);
 
     expect(response.body.booking.status).toBe(BOOKING_STATUS.QUEUED);
+    expect(emitSpy).toHaveBeenCalledWith(expect.anything(), 'booking:queued');
+    expect(emitSpy).toHaveBeenCalledWith(expect.anything(), 'booking:created');
   });
 
   test('booking validation returns 400 for blank address input', async () => {
@@ -54,6 +58,7 @@ describe('dispatch lifecycle', () => {
     const client = await createUser({ role: ROLES.CLIENT, email: 'client-flow@test.local', name: 'Nico Ibarra' });
     const admin = await createUser({ role: ROLES.ADMIN, email: 'admin@test.local', name: 'Mara Ellison' });
     const { user: driverUser, profile } = await createDriver();
+    const emitSpy = jest.spyOn(realtime, 'emitBookingEvent');
 
     const created = await request(app)
       .post('/api/bookings')
@@ -118,6 +123,18 @@ describe('dispatch lifecycle', () => {
     const completedIndex = stored.statusHistory.findIndex((entry) => entry.status === BOOKING_STATUS.COMPLETED);
     expect(paidIndex).toBeGreaterThan(-1);
     expect(completedIndex).toBeGreaterThan(paidIndex);
+    expect(emitSpy.mock.calls.map((call) => call[1])).toEqual(
+      expect.arrayContaining([
+        'booking:assigned',
+        'booking:created',
+        'booking:accepted',
+        'trip:started',
+        'trip:ended',
+        'payment:client_confirmed',
+        'payment:driver_confirmed',
+        'booking:completed'
+      ])
+    );
   });
 
   test('driver rejection reassigns booking to another available driver first', async () => {

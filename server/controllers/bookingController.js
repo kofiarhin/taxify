@@ -5,6 +5,7 @@ const { ROLES } = require('../constants/roles');
 const { BOOKING_STATUS, DRIVER_STATUS } = require('../constants/statuses');
 const ApiError = require('../utils/apiError');
 const asyncHandler = require('../utils/asyncHandler');
+const realtime = require('../realtime/socket');
 const { assignAvailableDriver, reassignBooking, retryAssignment } = require('../services/assignmentService');
 const { finalizePaidBooking, setBookingStatus } = require('../services/bookingLifecycleService');
 
@@ -45,6 +46,7 @@ const createBooking = asyncHandler(async (req, res) => {
   setBookingStatus(booking, BOOKING_STATUS.PENDING_ASSIGNMENT, { actor: req.user._id, note: 'Booking created' });
   await assignAvailableDriver(booking);
   const hydrated = await populateBooking(Booking.findById(booking._id));
+  realtime.emitBookingEvent(hydrated, 'booking:created');
   res.status(201).json({ booking: hydrated });
 });
 
@@ -112,6 +114,7 @@ const cancelBooking = asyncHandler(async (req, res) => {
   setBookingStatus(booking, BOOKING_STATUS.CANCELLED, { actor: req.user._id, note: 'Booking cancelled' });
   booking.cancelledAt = new Date();
   await booking.save();
+  realtime.emitBookingEvent(booking, 'booking:cancelled');
   res.json({ booking });
 });
 
@@ -121,6 +124,7 @@ const disputeBooking = asyncHandler(async (req, res) => {
   setBookingStatus(booking, BOOKING_STATUS.DISPUTED, { actor: req.user._id, note: 'Booking disputed' });
   booking.disputedAt = new Date();
   await booking.save();
+  realtime.emitBookingEvent(booking, 'booking:disputed');
   res.json({ booking });
 });
 
@@ -153,6 +157,7 @@ const completeOverride = asyncHandler(async (req, res) => {
 
   const completed = await finalizePaidBooking(booking, { actor: req.user._id, note: 'Admin completed booking' });
   const hydrated = await populateBooking(Booking.findById(completed._id));
+  realtime.emitBookingEvent(hydrated, 'booking:completed');
   res.json({ booking: hydrated });
 });
 

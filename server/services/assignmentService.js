@@ -2,6 +2,7 @@ const AssignmentAttempt = require('../models/AssignmentAttempt');
 const Booking = require('../models/Booking');
 const DriverProfile = require('../models/DriverProfile');
 const { BOOKING_STATUS, DRIVER_APPROVAL_STATUS, DRIVER_STATUS } = require('../constants/statuses');
+const realtime = require('../realtime/socket');
 const { setBookingStatus } = require('./bookingLifecycleService');
 
 const recordAssignmentAttempt = async (payload) => {
@@ -34,6 +35,7 @@ const assignAvailableDriver = async (booking, options = {}) => {
     booking.assignedDriver = undefined;
     await booking.save();
     await recordAssignmentAttempt({ booking: booking._id, status: 'NO_DRIVER', note: 'No approved active driver available' });
+    realtime.emitBookingEvent(booking, 'booking:queued');
     return booking;
   }
 
@@ -48,10 +50,12 @@ const assignAvailableDriver = async (booking, options = {}) => {
   await driver.save();
 
   await recordAssignmentAttempt({ booking: booking._id, driver: driver._id, status: 'ASSIGNED' });
+  realtime.emitBookingEvent(booking, 'booking:assigned');
   return booking;
 };
 
 const requeueBooking = async (booking, driver, note = 'Driver rejected booking') => {
+  const rejectedDriverId = driver?._id;
   if (driver) {
     driver.lifecycleStatus = DRIVER_STATUS.ACTIVE;
     await driver.save();
@@ -61,6 +65,10 @@ const requeueBooking = async (booking, driver, note = 'Driver rejected booking')
   setBookingStatus(booking, BOOKING_STATUS.PENDING_ASSIGNMENT, { note });
   booking.assignedDriver = undefined;
   await booking.save();
+  const rejectedPayload = realtime.emitBookingEvent(booking, 'booking:rejected');
+  if (rejectedDriverId) {
+    realtime.emitToDriver(rejectedDriverId, 'booking:rejected', rejectedPayload);
+  }
   return assignAvailableDriver(booking, { excludeDriverIds: driver ? [driver._id] : [] });
 };
 
@@ -85,11 +93,13 @@ const reassignBooking = async (booking, { actor } = {}) => {
   setBookingStatus(booking, BOOKING_STATUS.PENDING_ASSIGNMENT, { actor, note: 'Admin requested reassignment' });
   booking.assignedDriver = undefined;
   await booking.save();
-  return assignAvailableDriver(booking, {
+  const updated = await assignAvailableDriver(booking, {
     actor,
     excludeDriverIds: previousDriverId ? [previousDriverId] : [],
     note: 'Admin reassignment'
   });
+  realtime.emitBookingEvent(updated, 'booking:reassigned');
+  return updated;
 };
 
 module.exports = { assignAvailableDriver, reassignBooking, requeueBooking, retryAssignment };

@@ -47,20 +47,20 @@ none configured
 - Unit tests: Vitest for frontend smoke/component tests
 - Integration tests: Jest + Supertest + mongodb-memory-server for backend API behavior
 - End-to-end tests: Playwright at repo root under `e2e/`, run with `npm run test:e2e`
-- Manual verification notes: REST-only phase; no Socket.IO client/server runtime is configured.
+- Manual verification notes: Socket.IO realtime dispatch is configured for booking lifecycle updates; REST remains the authoritative API surface.
 
 ## Repo Conventions
 
 - Folder conventions: `client/` for React app, `server/` flat Express/Mongoose backend, no `server/src/`.
 - Naming conventions: role constants use uppercase role names; booking and driver lifecycle statuses use uppercase enum strings.
-- API conventions: REST API under `/api`, Bearer JWT auth, controllers delegate domain work to services where useful.
+- API conventions: REST API under `/api`, Bearer JWT auth, Socket.IO auth via `handshake.auth.token`, controllers delegate domain work to services where useful.
 - State management conventions: Redux Toolkit stores auth/client UI state; TanStack Query handles server state through custom hooks.
 - Error handling conventions: centralized Express error middleware returns `{ error: { code, message } }`.
-- Booking lifecycle conventions: current status lives on `Booking.status`; audited transitions are also appended to `Booking.statusHistory` so the REST MVP can later emit real-time events without losing transition order.
+- Booking lifecycle conventions: current status lives on `Booking.status`; audited transitions are appended to `Booking.statusHistory`; realtime booking events use Socket.IO rooms for role, user, and driver-profile delivery.
 
 ## Architecture Rules
 
-- REST endpoints are the transport for this phase; lifecycle services should remain easy to wrap with future real-time notifications.
+- REST endpoints remain backward-compatible and authoritative; Socket.IO publishes booking lifecycle updates for live UI refresh.
 - Admin booking operations include cancel, dispute, reassign, retry assignment, and completion override through REST endpoints under `/api/bookings/:bookingId`.
 - Frontend API calls go through `client/src/lib/api.js`; service files and query/mutation hooks wrap server calls.
 - Backend validates required environment variables at startup.
