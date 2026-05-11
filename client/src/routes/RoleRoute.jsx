@@ -1,32 +1,8 @@
-import { Navigate, Outlet } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { Navigate, Outlet } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 
-export function RoleRoute({ allowedRoles }) {
-  const user = useSelector((state) => state.auth.user);
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!allowedRoles.includes(user.role)) {
-    return <Navigate to={getDefaultRoute(user.role)} replace />;
-  }
-
+export function RoleRoute({ roles }) {
+  const { user } = useSelector((state) => state.auth);
+  if (!user || !roles.includes(user.role)) return <Navigate to="/login" replace />;
   return <Outlet />;
-}
-
-function getDefaultRoute(role) {
-  if (role === "ADMIN") {
-    return "/admin";
-  }
-
-  if (role === "AGENT") {
-    return "/agent";
-  }
-
-  if (role === "CLIENT") {
-    return "/client";
-  }
-
-  return "/driver";
 }

@@ -1,33 +1,20 @@
-import { useState } from "react";
-import { Provider } from "react-redux";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { store } from "./store";
-import { useSocketSync } from "../hooks/useSocketSync";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Provider } from 'react-redux';
+import { store } from './store';
 
-function RuntimeHooks() {
-  useSocketSync();
-  return null;
-}
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1
+    }
+  }
+});
 
-export function Providers({ children }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            retry: 1,
-            refetchOnWindowFocus: false,
-          },
-        },
-      })
-  );
-
+export function AppProviders({ children }) {
   return (
     <Provider store={store}>
-      <QueryClientProvider client={queryClient}>
-        <RuntimeHooks />
-        {children}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </Provider>
   );
 }

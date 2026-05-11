@@ -1,41 +1,10 @@
-import { api } from "../lib/api";
+import { api } from '../lib/api';
 
-export async function getMyAssignment() {
-  const response = await api.get("/assignments/me");
-  return response.data.data;
-}
-
-export async function acceptAssignment(attemptId) {
-  const response = await api.post(`/assignments/${attemptId}/accept`);
-  return response.data.data;
-}
-
-export async function rejectAssignment(attemptId, reason = "") {
-  const response = await api.post(`/assignments/${attemptId}/reject`, { reason });
-  return response.data.data;
-}
-
-export async function startTrip(bookingId) {
-  const response = await api.post(`/trips/${bookingId}/start`);
-  return response.data.data;
-}
-
-export async function endTrip(bookingId) {
-  const response = await api.post(`/trips/${bookingId}/end`, {});
-  return response.data.data;
-}
-
-export async function confirmPayment(bookingId) {
-  const response = await api.post(`/trips/${bookingId}/confirm-payment`);
-  return response.data.data;
-}
-
-export async function getMyTrips(params = {}) {
-  const response = await api.get("/trips/mine", { params });
-  return response.data.data;
-}
-
-export async function getAllTrips(params = {}) {
-  const response = await api.get("/trips", { params });
-  return response.data.data;
-}
+export const tripService = {
+  accept: (bookingId) => api.post(`/trips/${bookingId}/accept`).then((res) => res.data),
+  reject: (bookingId) => api.post(`/trips/${bookingId}/reject`).then((res) => res.data),
+  start: (bookingId) => api.post(`/trips/${bookingId}/start`).then((res) => res.data),
+  end: (bookingId, payload) => api.post(`/trips/${bookingId}/end`, payload).then((res) => res.data),
+  clientConfirm: (bookingId) => api.post(`/trips/${bookingId}/client-confirm`).then((res) => res.data),
+  paymentConfirm: (bookingId) => api.post(`/trips/${bookingId}/payment-confirm`).then((res) => res.data)
+};

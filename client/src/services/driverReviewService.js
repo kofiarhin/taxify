@@ -1,9 +1,6 @@
-import { api } from "../lib/api";
+import { api } from '../lib/api';
 
-export async function submitDriverReview({ bookingId, rating, comment }) {
-  const response = await api.post(`/client/bookings/${bookingId}/review`, {
-    rating,
-    comment,
-  });
-  return response.data.data;
-}
+export const driverReviewService = {
+  create: (bookingId, payload) => api.post(`/reviews/bookings/${bookingId}`, payload).then((res) => res.data),
+  listForDriver: (driverId) => api.get(`/reviews/drivers/${driverId}`).then((res) => res.data)
+};

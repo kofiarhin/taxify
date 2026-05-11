@@ -1,43 +1,28 @@
-const { request, app, createUser } = require("./helpers/testUtils");
+const request = require('supertest');
+const app = require('../app');
+const { ROLES } = require('../constants/roles');
+const { authHeader, createUser } = require('./helpers/testUtils');
 
-describe("auth flow", () => {
-  it("logs in an active admin user", async () => {
-    await createUser({
-      role: "ADMIN",
-      fullName: "Mara Ellison",
-      email: "admin@taxify.local",
-      password: "TaxifyPass123",
-    });
+describe('auth and role protection', () => {
+  test('client registration, login, and /me work without exposing passwordHash', async () => {
+    const register = await request(app)
+      .post('/api/auth/register')
+      .send({ name: 'Nico Ibarra', email: 'nico@test.local', password: 'Password123!', role: ROLES.CLIENT })
+      .expect(201);
 
-    const response = await request(app).post("/api/v1/auth/login").send({
-      email: "admin@taxify.local",
-      password: "TaxifyPass123",
-    });
+    expect(register.body.token).toBeTruthy();
+    expect(register.body.user.passwordHash).toBeUndefined();
 
-    expect(response.statusCode).toBe(200);
-    expect(response.body.success).toBe(true);
-    expect(response.body.data.token).toBeTruthy();
-    expect(response.body.data.user.email).toBe("admin@taxify.local");
+    const login = await request(app).post('/api/auth/login').send({ email: 'nico@test.local', password: 'Password123!' }).expect(200);
+    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${login.body.token}`).expect(200);
+
+    expect(me.body.user.email).toBe('nico@test.local');
+    expect(me.body.user.passwordHash).toBeUndefined();
   });
 
-  it("rejects access to /auth/me without a token", async () => {
-    const response = await request(app).get("/api/v1/auth/me");
+  test('role guard blocks non-admin driver management', async () => {
+    const client = await createUser({ role: ROLES.CLIENT, email: 'client@test.local', name: 'Mara Finch' });
 
-    expect(response.statusCode).toBe(401);
-    expect(response.body.success).toBe(false);
-  });
-
-  it("registers a client account without exposing password hashes", async () => {
-    const response = await request(app).post("/api/v1/auth/register-client").send({
-      fullName: "Avery Mensah",
-      email: "avery.client@taxify.local",
-      phone: "+1 (312) 847-3049",
-      password: "TaxifyPass123",
-    });
-
-    expect(response.statusCode).toBe(201);
-    expect(response.body.data.token).toBeTruthy();
-    expect(response.body.data.user.role).toBe("CLIENT");
-    expect(response.body.data.user.passwordHash).toBeUndefined();
+    await request(app).get('/api/drivers').set(authHeader(client)).expect(403);
   });
 });

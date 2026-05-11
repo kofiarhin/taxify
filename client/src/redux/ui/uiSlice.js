@@ -1,23 +1,14 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice } from '@reduxjs/toolkit';
 
 const uiSlice = createSlice({
-  name: "ui",
-  initialState: {
-    notice: null,
-    socketState: "offline",
-  },
+  name: 'ui',
+  initialState: { lastToast: null },
   reducers: {
-    setNotice(state, action) {
-      state.notice = action.payload;
-    },
-    clearNotice(state) {
-      state.notice = null;
-    },
-    setSocketState(state, action) {
-      state.socketState = action.payload;
-    },
-  },
+    setToast(state, action) {
+      state.lastToast = action.payload;
+    }
+  }
 });
 
-export const { setNotice, clearNotice, setSocketState } = uiSlice.actions;
+export const { setToast } = uiSlice.actions;
 export default uiSlice.reducer;

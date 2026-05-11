@@ -1,50 +1,22 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  approveDriver,
-  deactivateDriver,
-  reactivateDriver,
-  suspendDriver,
-} from "../../services/driverService";
-import { queryKeys } from "../queryKeys";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { driverService } from '../../services/driverService';
+import { queryKeys } from '../queryKeys';
 
-async function invalidateDriverQueries(queryClient) {
-  await queryClient.invalidateQueries({ queryKey: queryKeys.driversPending });
-  await queryClient.invalidateQueries({ queryKey: queryKeys.driversAll });
-  await queryClient.invalidateQueries({ queryKey: queryKeys.dashboardSummary });
-}
-
-export function useApproveDriverMutation() {
+export const useDriverStatusMutation = () => {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: approveDriver,
-    onSuccess: async () => invalidateDriverQueries(queryClient),
+    mutationFn: ({ driverId, payload }) => driverService.updateStatus(driverId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.drivers });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminSummary });
+    }
   });
-}
+};
 
-export function useSuspendDriverMutation() {
+export const useDriverAvailabilityMutation = () => {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: ({ id, reason }) => suspendDriver(id, reason),
-    onSuccess: async () => invalidateDriverQueries(queryClient),
+    mutationFn: driverService.updateAvailability,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.driverProfile })
   });
-}
-
-export function useReactivateDriverMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: reactivateDriver,
-    onSuccess: async () => invalidateDriverQueries(queryClient),
-  });
-}
-
-export function useDeactivateDriverMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, reason }) => deactivateDriver(id, reason),
-    onSuccess: async () => invalidateDriverQueries(queryClient),
-  });
-}
+};

@@ -1,6 +1,5 @@
-import { api } from "../lib/api";
+import { api } from '../lib/api';
 
-export async function getDashboardSummary() {
-  const response = await api.get("/dashboard/summary");
-  return response.data.data;
-}
+export const dashboardService = {
+  adminSummary: () => api.get('/dashboard/admin').then((res) => res.data)
+};

@@ -1,123 +1,31 @@
-const mongoose = require("mongoose");
-const { DRIVER_STATUSES, LIFECYCLE_REASONS } = require("../constants/statuses");
+const mongoose = require('mongoose');
+const { DRIVER_APPROVAL_STATUS, DRIVER_STATUS } = require('../constants/statuses');
 
 const driverProfileSchema = new mongoose.Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      unique: true,
-    },
-    status: {
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    approvalStatus: {
       type: String,
-      enum: Object.values(DRIVER_STATUSES),
-      default: DRIVER_STATUSES.PENDING_APPROVAL,
+      enum: Object.values(DRIVER_APPROVAL_STATUS),
+      default: DRIVER_APPROVAL_STATUS.PENDING
     },
-    licenseNumber: {
+    lifecycleStatus: {
       type: String,
-      required: true,
-      trim: true,
+      enum: Object.values(DRIVER_STATUS),
+      default: DRIVER_STATUS.OFFLINE
     },
-    licenseExpiry: {
-      type: Date,
-      required: true,
-    },
-    vehicleMake: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    vehicleModel: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    vehiclePlate: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    vehicleColor: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    nationalId: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    address: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    emergencyContact: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    approvedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-    approvedAt: {
-      type: Date,
-      default: null,
-    },
-    suspendedAt: {
-      type: Date,
-      default: null,
-    },
-    suspensionReason: {
-      type: String,
-      default: "",
-    },
-    deactivatedAt: {
-      type: Date,
-      default: null,
-    },
-    deactivationReason: {
-      type: String,
-      default: "",
-    },
-    lifecycleReason: {
-      type: String,
-      enum: Object.values(LIFECYCLE_REASONS),
-      default: LIFECYCLE_REASONS.NONE,
-    },
-    currentAssignmentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "AssignmentAttempt",
-      default: null,
-    },
-    lastAssignedAt: {
-      type: Date,
-      default: null,
-    },
-    commissionDebt: {
-      type: Number,
-      default: 0,
-    },
-    averageRating: {
-      type: Number,
-      default: 0,
-    },
-    reviewCount: {
-      type: Number,
-      default: 0,
-    },
-    ratingTotal: {
-      type: Number,
-      default: 0,
-    },
+    licenseNumber: { type: String, trim: true },
+    vehicleMake: { type: String, trim: true },
+    vehicleModel: { type: String, trim: true },
+    vehiclePlate: { type: String, trim: true },
+    ratingAverage: { type: Number, default: null },
+    reviewCount: { type: Number, default: 0 },
+    approvedAt: Date,
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-module.exports =
-  mongoose.models.DriverProfile || mongoose.model("DriverProfile", driverProfileSchema);
+driverProfileSchema.index({ approvalStatus: 1, lifecycleStatus: 1, createdAt: 1 });
+
+module.exports = mongoose.model('DriverProfile', driverProfileSchema);

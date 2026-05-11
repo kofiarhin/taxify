@@ -1,64 +1,28 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice } from '@reduxjs/toolkit';
 
-const initialToken = window.localStorage.getItem("taxify_token");
+const initialState = {
+  user: JSON.parse(localStorage.getItem('taxify_user') || 'null'),
+  token: localStorage.getItem('taxify_token')
+};
 
 const authSlice = createSlice({
-  name: "auth",
-  initialState: {
-    token: initialToken,
-    user: null,
-    status: initialToken ? "checking" : "idle",
-    error: null,
-  },
+  name: 'auth',
+  initialState,
   reducers: {
-    authRequestStarted(state) {
-      state.status = "loading";
-      state.error = null;
+    setCredentials(state, action) {
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      localStorage.setItem('taxify_user', JSON.stringify(action.payload.user));
+      localStorage.setItem('taxify_token', action.payload.token);
     },
-    authResolved(state, action) {
-      const payload = action?.payload ?? {};
-      const user = payload.user ?? null;
-      const token = payload.token ?? state.token ?? null;
-
-      if (!user) {
-        state.status = "idle";
-        state.user = null;
-        state.token = null;
-        state.error = "Invalid login response from server";
-        return;
-      }
-
-      state.status = "authenticated";
-      state.user = user;
-      state.token = token;
-      state.error = null;
-    },
-    authCheckFinished(state) {
-      if (!state.user) {
-        state.status = "idle";
-      }
-    },
-    authFailed(state, action) {
-      state.status = "idle";
+    clearCredentials(state) {
       state.user = null;
       state.token = null;
-      state.error = action?.payload || "Authentication failed";
-    },
-    logoutSucceeded(state) {
-      state.status = "idle";
-      state.user = null;
-      state.token = null;
-      state.error = null;
-    },
-  },
+      localStorage.removeItem('taxify_user');
+      localStorage.removeItem('taxify_token');
+    }
+  }
 });
 
-export const {
-  authRequestStarted,
-  authResolved,
-  authCheckFinished,
-  authFailed,
-  logoutSucceeded,
-} = authSlice.actions;
-
+export const { clearCredentials, setCredentials } = authSlice.actions;
 export default authSlice.reducer;

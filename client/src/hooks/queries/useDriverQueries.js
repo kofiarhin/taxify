@@ -1,24 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
-import { getDrivers, getMyDriverProfile, getPendingDrivers } from "../../services/driverService";
-import { queryKeys } from "../queryKeys";
+import { useQuery } from '@tanstack/react-query';
+import { driverService } from '../../services/driverService';
+import { queryKeys } from '../queryKeys';
 
-export function usePendingDriversQuery() {
-  return useQuery({
-    queryKey: queryKeys.driversPending,
-    queryFn: getPendingDrivers,
+export const useDriversQuery = () =>
+  useQuery({
+    queryKey: queryKeys.drivers,
+    queryFn: driverService.list
   });
-}
 
-export function useAllDriversQuery() {
-  return useQuery({
-    queryKey: queryKeys.driversAll,
-    queryFn: getDrivers,
+export const useDriverProfileQuery = () =>
+  useQuery({
+    queryKey: queryKeys.driverProfile,
+    queryFn: driverService.me
   });
-}
-
-export function useMyDriverProfileQuery() {
-  return useQuery({
-    queryKey: queryKeys.myDriverProfile,
-    queryFn: getMyDriverProfile,
-  });
-}

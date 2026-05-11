@@ -1,40 +1,22 @@
-const express = require("express");
-const { z } = require("zod");
-const { ROLES } = require("../constants/roles");
-const { auth } = require("../middleware/auth");
-const { requireRole } = require("../middleware/requireRole");
-const { validateRequest } = require("../middleware/validateRequest");
-const { driverValidationSchemas } = require("../validators/driverValidators");
+const express = require('express');
+const auth = require('../middleware/auth');
+const requireRole = require('../middleware/requireRole');
+const { ROLES } = require('../constants/roles');
 const {
-  register,
-  list,
-  getPending,
-  approve,
-  suspend,
-  reactivate,
-  deactivate,
-  me,
-} = require("../controllers/driverController");
+  listDrivers,
+  myProfile,
+  updateAvailability,
+  updateDriverStatus,
+  updateOnboarding
+} = require('../controllers/driverController');
 
 const router = express.Router();
 
-const driverActionSchema = z.object({
-  body: z.object({
-    reason: z.string().min(3).optional(),
-  }),
-  params: z.object({
-    id: z.string().min(1),
-  }),
-  query: z.object({}),
-});
-
-router.post("/register", validateRequest(driverValidationSchemas.register), register);
-router.get("/me", auth, requireRole(ROLES.DRIVER), me);
-router.get("/", auth, requireRole(ROLES.ADMIN), list);
-router.get("/pending", auth, requireRole(ROLES.ADMIN), getPending);
-router.post("/:id/approve", auth, requireRole(ROLES.ADMIN), validateRequest(driverActionSchema), approve);
-router.post("/:id/suspend", auth, requireRole(ROLES.ADMIN), validateRequest(driverActionSchema), suspend);
-router.post("/:id/reactivate", auth, requireRole(ROLES.ADMIN), validateRequest(driverActionSchema), reactivate);
-router.post("/:id/deactivate", auth, requireRole(ROLES.ADMIN), validateRequest(driverActionSchema), deactivate);
+router.use(auth);
+router.get('/', requireRole(ROLES.ADMIN, ROLES.AGENT), listDrivers);
+router.get('/me', requireRole(ROLES.DRIVER), myProfile);
+router.patch('/me/onboarding', requireRole(ROLES.DRIVER), updateOnboarding);
+router.patch('/me/availability', requireRole(ROLES.DRIVER), updateAvailability);
+router.patch('/:driverId/status', requireRole(ROLES.ADMIN), updateDriverStatus);
 
 module.exports = router;

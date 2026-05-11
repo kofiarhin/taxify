@@ -1,125 +1,47 @@
-const mongoose = require("mongoose");
-const { BOOKING_STATUSES, ASSIGNMENT_MODES } = require("../constants/statuses");
+const mongoose = require('mongoose');
+const { BOOKING_STATUS } = require('../constants/statuses');
 
 const bookingSchema = new mongoose.Schema(
   {
-    bookingReference: {
-      type: String,
-      required: true,
-      unique: true,
-    },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    clientId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-    customerName: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    customerPhone: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    pickupAddress: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    dropoffAddress: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    pickupTime: {
-      type: Date,
-      required: true,
-    },
-    specialInstructions: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    estimatedFare: {
-      type: Number,
-      default: null,
-    },
-    finalFare: {
-      type: Number,
-      default: null,
-    },
+    client: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    source: { type: String, enum: ['CLIENT_APP', 'AGENT'], required: true },
+    passengerName: { type: String, required: true, trim: true },
+    passengerPhone: { type: String, trim: true },
+    pickupAddress: { type: String, required: true, trim: true },
+    dropoffAddress: { type: String, required: true, trim: true },
     status: {
       type: String,
-      enum: Object.values(BOOKING_STATUSES),
-      default: BOOKING_STATUSES.PENDING_ASSIGNMENT,
+      enum: Object.values(BOOKING_STATUS),
+      default: BOOKING_STATUS.PENDING_ASSIGNMENT,
+      index: true
     },
-    assignmentMode: {
-      type: String,
-      enum: Object.values(ASSIGNMENT_MODES),
-      default: ASSIGNMENT_MODES.AUTO,
+    assignedDriver: { type: mongoose.Schema.Types.ObjectId, ref: 'DriverProfile' },
+    distanceKm: { type: Number, default: null },
+    durationMinutes: { type: Number, default: null },
+    fare: {
+      baseFare: { type: Number, default: 10 },
+      perKm: { type: Number, default: 3 },
+      perMinute: { type: Number, default: 1 },
+      total: { type: Number, default: 0 }
     },
-    assignedDriverId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "DriverProfile",
-      default: null,
+    payment: {
+      method: { type: String, enum: ['CASH'], default: 'CASH' },
+      status: { type: String, enum: ['UNPAID', 'CLIENT_CONFIRMED', 'PAID'], default: 'UNPAID' },
+      clientConfirmedAt: Date,
+      driverConfirmedAt: Date
     },
-    acceptedAt: {
-      type: Date,
-      default: null,
-    },
-    rejectedAt: {
-      type: Date,
-      default: null,
-    },
-    cancelledAt: {
-      type: Date,
-      default: null,
-    },
-    cancelReason: {
-      type: String,
-      default: "",
-    },
-    queueEnteredAt: {
-      type: Date,
-      default: null,
-    },
-    completedAt: {
-      type: Date,
-      default: null,
-    },
-    clientConfirmedAt: {
-      type: Date,
-      default: null,
-    },
-    driverPaymentConfirmedAt: {
-      type: Date,
-      default: null,
-    },
-    paymentRecordedAt: {
-      type: Date,
-      default: null,
-    },
-    paidAt: {
-      type: Date,
-      default: null,
-    },
+    acceptedAt: Date,
+    startedAt: Date,
+    endedAt: Date,
+    completedAt: Date,
+    cancelledAt: Date,
+    disputedAt: Date
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-bookingSchema.index({ status: 1, createdAt: -1 });
-bookingSchema.index({ assignedDriverId: 1 });
-bookingSchema.index({ createdBy: 1 });
-bookingSchema.index({ clientId: 1, status: 1, createdAt: -1 });
-bookingSchema.index({ clientId: 1, createdAt: -1 });
+bookingSchema.index({ client: 1, createdAt: -1 });
+bookingSchema.index({ assignedDriver: 1, status: 1 });
 
-module.exports = mongoose.models.Booking || mongoose.model("Booking", bookingSchema);
+module.exports = mongoose.model('Booking', bookingSchema);

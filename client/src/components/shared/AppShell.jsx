@@ -1,125 +1,77 @@
-import {
-  ChartBar,
-  ChatCenteredDots,
-  ClockCountdown,
-  CurrencyDollar,
-  House,
-  ListBullets,
-  MapPin,
-  PlusCircle,
-  SignOut,
-  SteeringWheel,
-  UsersThree,
-  Warning,
-} from "@phosphor-icons/react";
-import { useDispatch, useSelector } from "react-redux";
-import { NavLink } from "react-router-dom";
-import { logoutSucceeded } from "../../redux/auth/authSlice";
+import { Car, ChartBar, ClipboardText, CurrencyDollar, Gauge, ListChecks, SignOut, UserCircle } from '@phosphor-icons/react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { clearCredentials } from '../../redux/auth/authSlice';
 
-const roleNavigation = {
+const navByRole = {
   ADMIN: [
-    { to: "/admin", label: "Overview", icon: House, end: true },
-    { to: "/admin/drivers", label: "Drivers", icon: SteeringWheel },
-    { to: "/admin/bookings", label: "Bookings", icon: ListBullets },
-    { to: "/admin/queue", label: "Queue", icon: ClockCountdown },
-    { to: "/admin/trips", label: "Trips", icon: ChartBar },
-    { to: "/admin/commissions", label: "Commissions", icon: CurrencyDollar },
-    { to: "/admin/complaints", label: "Complaints", icon: Warning },
-    { to: "/admin/users", label: "Team", icon: UsersThree },
+    ['Dashboard', '/admin', ChartBar],
+    ['Drivers', '/admin/drivers', UserCircle],
+    ['Bookings', '/admin/bookings', ClipboardText],
+    ['Commissions', '/admin/commissions', CurrencyDollar],
+    ['Complaints', '/admin/complaints', ListChecks]
   ],
   AGENT: [
-    { to: "/agent", label: "Dispatch", icon: House, end: true },
-    { to: "/agent/bookings/new", label: "New Booking", icon: PlusCircle },
-    { to: "/agent/queue", label: "Queue", icon: ClockCountdown },
-    { to: "/agent/complaints", label: "Complaints", icon: ChatCenteredDots },
+    ['Workspace', '/agent', Gauge],
+    ['Queue', '/agent/queue', ClipboardText],
+    ['Complaints', '/agent/complaints', ListChecks]
   ],
   DRIVER: [
-    { to: "/driver", label: "Drive", icon: SteeringWheel, end: true },
-    { to: "/driver/trips", label: "Trip History", icon: ListBullets },
-    { to: "/driver/commissions", label: "Commission", icon: CurrencyDollar },
+    ['Workspace', '/driver', Car],
+    ['Commissions', '/driver/commissions', CurrencyDollar]
   ],
   CLIENT: [
-    { to: "/client", label: "Ride", icon: House, end: true },
-    { to: "/client/bookings/new", label: "New Booking", icon: PlusCircle },
-    { to: "/client/bookings/current", label: "Tracker", icon: MapPin },
-  ],
+    ['Dashboard', '/client', Gauge],
+    ['Book ride', '/client/book', Car],
+    ['Current ride', '/client/current', ClipboardText]
+  ]
 };
 
-export function AppShell({ eyebrow, title, summary, children }) {
+export function AppShell() {
+  const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
-  const user = useSelector((state) => state.auth.user);
-  const socketState = useSelector((state) => state.ui.socketState);
-  const items = roleNavigation[user?.role] || [];
+  const navigate = useNavigate();
+  const links = navByRole[user?.role] || [];
 
-  function handleLogout() {
-    window.localStorage.removeItem("taxify_token");
-    dispatch(logoutSucceeded());
-  }
+  const logout = () => {
+    dispatch(clearCredentials());
+    navigate('/login');
+  };
 
   return (
-    <div className="min-h-dvh bg-transparent px-4 py-4 text-zinc-100 md:px-6 md:py-6">
-      <div className="mx-auto grid min-h-[calc(100dvh-2rem)] max-w-350 grid-cols-1 gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="rounded-[2.5rem] border border-white/10 bg-zinc-950/70 p-6 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-          <div className="mb-6">
-            <p className="text-xs uppercase tracking-[0.28em] text-emerald-300/70">Taxify</p>
-            <h1 className="mt-3 text-2xl tracking-tight text-white">Operations grid</h1>
+    <div className="min-h-[100dvh] bg-slate-50 text-slate-950">
+      <header className="border-b border-slate-200 bg-white/85 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Taxify Dispatch</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-950">{user?.role?.toLowerCase()} console</h1>
           </div>
-
-          <nav className="space-y-1">
-            {items.map(({ to, label, icon: Icon, end }) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {links.map(([label, to, Icon]) => (
               <NavLink
                 key={to}
                 to={to}
-                end={end}
+                end={to.split('/').length === 2}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-[1.4rem] border px-4 py-3 text-sm transition duration-300 ${
-                    isActive
-                      ? "border-emerald-300/30 bg-emerald-300/10 text-white"
-                      : "border-white/5 bg-white/3 text-zinc-400 hover:border-white/10 hover:text-zinc-100"
+                  `inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
+                    isActive ? 'bg-teal-700 text-white' : 'text-slate-700 hover:bg-slate-100'
                   }`
                 }
               >
-                <Icon size={16} weight="duotone" />
+                <Icon size={17} weight="bold" />
                 {label}
               </NavLink>
             ))}
-          </nav>
-
-          <div className="mt-6 rounded-[1.6rem] border border-white/8 bg-white/3 p-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Signed in</p>
-            <p className="mt-2 text-base text-white">{user?.fullName}</p>
-            <p className="mt-1 text-sm text-zinc-400">{user?.email}</p>
-            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-zinc-500">
-              Realtime: {socketState}
-            </p>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-200 transition duration-300 hover:-translate-y-px hover:border-emerald-300/30 hover:bg-emerald-300/10 active:scale-[0.98]"
-            >
-              <SignOut size={16} />
+            <button className="button-secondary" type="button" onClick={logout}>
+              <SignOut size={17} weight="bold" />
               Sign out
             </button>
           </div>
-        </aside>
-
-        <main className="rounded-[2.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-6 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.45)] backdrop-blur-sm md:p-8">
-          {(eyebrow || title) && (
-            <header className="mb-8 border-b border-white/8 pb-6">
-              {eyebrow && (
-                <p className="text-xs uppercase tracking-[0.3em] text-emerald-300/70">{eyebrow}</p>
-              )}
-              {title && (
-                <h2 className="mt-2 text-3xl tracking-tighter text-white md:text-4xl">{title}</h2>
-              )}
-              {summary && (
-                <p className="mt-3 max-w-[65ch] text-sm leading-relaxed text-zinc-400">{summary}</p>
-              )}
-            </header>
-          )}
-          <section>{children}</section>
-        </main>
-      </div>
+        </div>
+      </header>
+      <main className="mx-auto max-w-7xl px-4 py-8">
+        <Outlet />
+      </main>
     </div>
   );
 }

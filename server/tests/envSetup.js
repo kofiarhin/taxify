@@ -1,0 +1,9 @@
+process.env.NODE_ENV = 'test';
+process.env.MONGO_URI = 'mongodb://127.0.0.1:27017/taxify-test-bootstrap';
+process.env.JWT_SECRET = 'test-secret-with-enough-length';
+process.env.JWT_EXPIRES_IN = '1h';
+process.env.CLIENT_ORIGIN = 'http://localhost:5173';
+process.env.FARE_BASE = '10';
+process.env.FARE_PER_KM = '3';
+process.env.FARE_PER_MINUTE = '1';
+process.env.COMMISSION_RATE = '0.1';

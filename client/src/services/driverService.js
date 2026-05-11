@@ -1,41 +1,9 @@
-import { api } from "../lib/api";
+import { api } from '../lib/api';
 
-export async function registerDriver(payload) {
-  const response = await api.post("/drivers/register", payload);
-  return response.data.data;
-}
-
-export async function getMyDriverProfile() {
-  const response = await api.get("/drivers/me");
-  return response.data.data.driver;
-}
-
-export async function getPendingDrivers() {
-  const response = await api.get("/drivers/pending");
-  return response.data.data.drivers;
-}
-
-export async function getDrivers() {
-  const response = await api.get("/drivers");
-  return response.data.data.drivers;
-}
-
-export async function approveDriver(id) {
-  const response = await api.post(`/drivers/${id}/approve`);
-  return response.data.data.driver;
-}
-
-export async function suspendDriver(id, reason = "") {
-  const response = await api.post(`/drivers/${id}/suspend`, { reason });
-  return response.data.data.driver;
-}
-
-export async function reactivateDriver(id) {
-  const response = await api.post(`/drivers/${id}/reactivate`);
-  return response.data.data.driver;
-}
-
-export async function deactivateDriver(id, reason = "") {
-  const response = await api.post(`/drivers/${id}/deactivate`, { reason });
-  return response.data.data.driver;
-}
+export const driverService = {
+  list: () => api.get('/drivers').then((res) => res.data),
+  me: () => api.get('/drivers/me').then((res) => res.data),
+  updateOnboarding: (payload) => api.patch('/drivers/me/onboarding', payload).then((res) => res.data),
+  updateAvailability: (payload) => api.patch('/drivers/me/availability', payload).then((res) => res.data),
+  updateStatus: (driverId, payload) => api.patch(`/drivers/${driverId}/status`, payload).then((res) => res.data)
+};

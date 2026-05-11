@@ -1,30 +1,26 @@
-const jwt = require("jsonwebtoken");
-const User = require("../models/User");
-const { env } = require("../config/env");
-const { ApiError } = require("../utils/apiError");
+const jwt = require('jsonwebtoken');
+const env = require('../config/env');
+const User = require('../models/User');
+const ApiError = require('../utils/apiError');
+const asyncHandler = require('../utils/asyncHandler');
 
-async function auth(req, _res, next) {
-  const header = req.headers.authorization;
+const auth = asyncHandler(async (req, _res, next) => {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
 
-  if (!header || !header.startsWith("Bearer ")) {
-    return next(new ApiError(401, "Authentication required"));
+  if (!token) {
+    throw new ApiError(401, 'Authentication token is required', 'AUTH_REQUIRED');
   }
 
-  const token = header.replace("Bearer ", "");
+  const payload = jwt.verify(token, env.JWT_SECRET);
+  const user = await User.findById(payload.sub);
 
-  try {
-    const payload = jwt.verify(token, env.JWT_SECRET);
-    const user = await User.findById(payload.sub).select("-passwordHash");
-
-    if (!user || !user.isActive) {
-      return next(new ApiError(401, "User is no longer active"));
-    }
-
-    req.user = user;
-    return next();
-  } catch (_error) {
-    return next(new ApiError(401, "Invalid or expired token"));
+  if (!user || user.status !== 'ACTIVE') {
+    throw new ApiError(401, 'Invalid authentication token', 'AUTH_INVALID');
   }
-}
 
-module.exports = { auth };
+  req.user = user;
+  next();
+});
+
+module.exports = auth;

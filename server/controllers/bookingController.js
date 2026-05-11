@@ -1,121 +1,121 @@
-const Booking = require("../models/Booking");
-const AuditLog = require("../models/AuditLog");
-const { asyncHandler } = require("../utils/asyncHandler");
-const { getPagination } = require("../utils/pagination");
-const { ApiError } = require("../utils/apiError");
-const {
-  dispatchBooking,
-  generateBookingReference,
-} = require("../services/assignmentService");
-const { cancelBooking: cancelBookingService } = require("../services/bookingCancellationService");
-const { BOOKING_STATUSES, ASSIGNMENT_MODES } = require("../constants/statuses");
-const { emitDomainEvent } = require("../socket");
+const { z } = require('zod');
+const Booking = require('../models/Booking');
+const DriverProfile = require('../models/DriverProfile');
+const { ROLES } = require('../constants/roles');
+const { BOOKING_STATUS, DRIVER_STATUS } = require('../constants/statuses');
+const ApiError = require('../utils/apiError');
+const asyncHandler = require('../utils/asyncHandler');
+const { assignAvailableDriver, retryAssignment } = require('../services/assignmentService');
+
+const optionalTrimmedString = () =>
+  z
+    .string()
+    .trim()
+    .transform((value) => (value.length > 0 ? value : undefined))
+    .optional();
+
+const bookingSchema = z.object({
+  passengerName: optionalTrimmedString().pipe(z.string().min(2).optional()),
+  passengerPhone: optionalTrimmedString(),
+  pickupAddress: z.string().trim().min(3),
+  dropoffAddress: z.string().trim().min(3)
+});
+
+const populateBooking = (query) =>
+  query
+    .populate('client', 'name email phone')
+    .populate('createdBy', 'name email role')
+    .populate({ path: 'assignedDriver', populate: { path: 'user', select: 'name email phone' } });
 
 const createBooking = asyncHandler(async (req, res) => {
-  const body = req.validated.body;
+  const data = bookingSchema.parse(req.body);
+  const isClient = req.user.role === ROLES.CLIENT;
+
   const booking = await Booking.create({
-    ...body,
-    bookingReference: generateBookingReference(),
+    client: isClient ? req.user._id : undefined,
     createdBy: req.user._id,
-    status: BOOKING_STATUSES.PENDING_ASSIGNMENT,
+    source: isClient ? 'CLIENT_APP' : 'AGENT',
+    passengerName: data.passengerName || req.user.name,
+    passengerPhone: data.passengerPhone || req.user.phone,
+    pickupAddress: data.pickupAddress,
+    dropoffAddress: data.dropoffAddress
   });
 
-  emitDomainEvent("booking.created", { bookingId: booking._id.toString() });
-  try {
-    await dispatchBooking(booking._id, ASSIGNMENT_MODES.AUTO);
-  } catch (error) {
-    console.warn("[booking] Auto-dispatch failed after booking creation", {
-      bookingId: booking._id.toString(),
-      error: error.message,
-    });
-    booking.status = BOOKING_STATUSES.QUEUED;
-    booking.assignedDriverId = null;
-    booking.queueEnteredAt = booking.queueEnteredAt ?? new Date();
-    await booking.save();
-    emitDomainEvent("booking.queued", {
-      bookingId: booking._id.toString(),
-      dispatchError: true,
-    });
-  }
-  const refreshed = await Booking.findById(booking._id);
-
-  await AuditLog.create({
-    actorUserId: req.user._id,
-    action: "BOOKING_CREATED",
-    entityType: "Booking",
-    entityId: booking._id,
-    metadata: { reference: booking.bookingReference, status: refreshed.status },
-  });
-
-  res.status(201).json({ success: true, data: { booking: refreshed } });
+  await assignAvailableDriver(booking);
+  const hydrated = await populateBooking(Booking.findById(booking._id));
+  res.status(201).json({ booking: hydrated });
 });
 
 const listBookings = asyncHandler(async (req, res) => {
-  const { page, limit, skip } = getPagination(req.query);
   const filter = {};
-  if (req.validated.query.status) filter.status = req.validated.query.status;
+  if (req.user.role === ROLES.CLIENT) filter.client = req.user._id;
+  if (req.user.role === ROLES.DRIVER) {
+    const profile = await DriverProfile.findOne({ user: req.user._id });
+    if (!profile) return res.json({ bookings: [] });
+    filter.assignedDriver = profile?._id;
+  }
+  if (req.query.status) filter.status = req.query.status;
 
-  const [bookings, total] = await Promise.all([
-    Booking.find(filter)
-      .populate("assignedDriverId", "vehicleMake vehicleModel vehiclePlate userId")
-      .populate("createdBy", "fullName email")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-    Booking.countDocuments(filter),
-  ]);
-
-  res.json({ success: true, data: { bookings, pagination: { page, limit, total } } });
+  const bookings = await populateBooking(Booking.find(filter).sort({ createdAt: -1 }).limit(100));
+  res.json({ bookings });
 });
 
 const getBooking = asyncHandler(async (req, res) => {
-  const booking = await Booking.findById(req.params.id)
-    .populate("assignedDriverId", "vehicleMake vehicleModel vehiclePlate userId")
-    .populate("createdBy", "fullName email");
+  const booking = await populateBooking(Booking.findById(req.params.bookingId));
+  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
 
-  if (!booking) throw new ApiError(404, "Booking not found");
-  res.json({ success: true, data: { booking } });
+  if (req.user.role === ROLES.CLIENT && booking.client?.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, 'Cannot view this booking', 'FORBIDDEN');
+  }
+
+  if (req.user.role === ROLES.DRIVER) {
+    const profile = await DriverProfile.findOne({ user: req.user._id });
+    if (booking.assignedDriver?._id?.toString() !== profile?._id?.toString()) {
+      throw new ApiError(403, 'Cannot view this booking', 'FORBIDDEN');
+    }
+  }
+
+  res.json({ booking });
 });
 
-const getQueue = asyncHandler(async (_req, res) => {
-  const bookings = await Booking.find({ status: BOOKING_STATUSES.QUEUED })
-    .populate("createdBy", "fullName")
-    .sort({ queueEnteredAt: 1 });
-
-  res.json({ success: true, data: { bookings } });
+const retry = asyncHandler(async (req, res) => {
+  const booking = await retryAssignment(req.params.bookingId);
+  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+  const hydrated = await populateBooking(Booking.findById(booking._id));
+  res.json({ booking: hydrated });
 });
 
 const cancelBooking = asyncHandler(async (req, res) => {
-  const { booking } = await cancelBookingService(req.params.id, {
-    reason: req.validated.body.reason || "",
-  });
+  const booking = await Booking.findById(req.params.bookingId);
+  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
 
-  await AuditLog.create({
-    actorUserId: req.user._id,
-    action: "BOOKING_CANCELLED",
-    entityType: "Booking",
-    entityId: booking._id,
-    metadata: { reason: booking.cancelReason },
-  });
-
-  res.json({ success: true, data: { booking } });
-});
-
-const retryAssignment = asyncHandler(async (req, res) => {
-  const booking = await Booking.findById(req.params.id);
-  if (!booking) throw new ApiError(404, "Booking not found");
-
-  if (booking.status !== BOOKING_STATUSES.QUEUED) {
-    throw new ApiError(400, "Only queued bookings can be retried");
+  const cancellable = [
+    BOOKING_STATUS.PENDING_ASSIGNMENT,
+    BOOKING_STATUS.QUEUED,
+    BOOKING_STATUS.DRIVER_ASSIGNED,
+    BOOKING_STATUS.DRIVER_ACCEPTED
+  ];
+  if (!cancellable.includes(booking.status)) {
+    throw new ApiError(409, 'Only pre-trip bookings can be cancelled', 'BOOKING_NOT_CANCELLABLE');
   }
 
-  booking.status = BOOKING_STATUSES.PENDING_ASSIGNMENT;
+  if (booking.assignedDriver) {
+    await DriverProfile.findByIdAndUpdate(booking.assignedDriver, { lifecycleStatus: DRIVER_STATUS.ACTIVE });
+  }
+
+  booking.status = BOOKING_STATUS.CANCELLED;
+  booking.cancelledAt = new Date();
   await booking.save();
-
-  await dispatchBooking(booking._id, ASSIGNMENT_MODES.QUEUE_RETRY);
-  const refreshed = await Booking.findById(booking._id);
-
-  res.json({ success: true, data: { booking: refreshed } });
+  res.json({ booking });
 });
 
-module.exports = { createBooking, listBookings, getBooking, getQueue, cancelBooking, retryAssignment };
+const disputeBooking = asyncHandler(async (req, res) => {
+  const booking = await Booking.findById(req.params.bookingId);
+  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+  booking.status = BOOKING_STATUS.DISPUTED;
+  booking.disputedAt = new Date();
+  await booking.save();
+  res.json({ booking });
+});
+
+module.exports = { cancelBooking, createBooking, disputeBooking, getBooking, listBookings, retry };

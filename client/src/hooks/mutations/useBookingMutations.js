@@ -1,46 +1,19 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { cancelBooking, createBooking, retryAssignment } from "../../services/bookingService";
-import { queryKeys } from "../queryKeys";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { bookingService } from '../../services/bookingService';
+import { queryKeys } from '../queryKeys';
 
-export function useCreateBookingMutation(options = {}) {
+export const useCreateBookingMutation = () => {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: createBooking,
-    onSuccess: async (...args) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.agentBookings });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.queue });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.bookingsRoot });
-      if (options.onSuccess) {
-        await options.onSuccess(...args);
-      }
-    },
+    mutationFn: bookingService.create,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.bookings })
   });
-}
+};
 
-export function useCancelBookingMutation() {
+export const useBookingActionMutation = (action) => {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (id) => cancelBooking(id),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.bookingsRoot });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.agentBookings });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.queue });
-    },
+    mutationFn: action,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.bookings })
   });
-}
-
-export function useRetryAssignmentMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: retryAssignment,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.queue });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.agentBookings });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.bookingsRoot });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.myAssignment });
-    },
-  });
-}
+};

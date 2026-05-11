@@ -1,103 +1,28 @@
-const mongoose = require("mongoose");
-const { COMMISSION_STATUSES, COMMISSION_RATE } = require("../constants/statuses");
+const mongoose = require('mongoose');
 
 const commissionStatementSchema = new mongoose.Schema(
   {
-    driverId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "DriverProfile",
-      required: true,
-    },
-    periodMonth: {
-      type: Number,
-      required: true,
-      min: 1,
-      max: 12,
-    },
-    periodYear: {
-      type: Number,
-      required: true,
-    },
-    tripIds: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Trip",
-      },
-    ],
-    grossTripRevenue: {
-      type: Number,
-      default: 0,
-    },
-    commissionRate: {
-      type: Number,
-      default: COMMISSION_RATE,
-    },
-    commissionTotal: {
-      type: Number,
-      default: 0,
-    },
-    amountPaid: {
-      type: Number,
-      default: 0,
-    },
-    balanceDue: {
-      type: Number,
-      default: 0,
-    },
-    dueDate: {
-      type: Date,
-      required: true,
-    },
+    booking: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', required: true, unique: true },
+    driver: { type: mongoose.Schema.Types.ObjectId, ref: 'DriverProfile', required: true },
+    month: { type: String, required: true, index: true },
+    fareTotal: { type: Number, required: true },
+    commissionRate: { type: Number, default: 0.1 },
+    commissionAmount: { type: Number, required: true },
     status: {
       type: String,
-      enum: Object.values(COMMISSION_STATUSES),
-      default: COMMISSION_STATUSES.DUE,
+      enum: ['PENDING', 'SUBMITTED', 'APPROVED', 'REJECTED'],
+      default: 'PENDING'
     },
-    receiptFileUrl: {
-      type: String,
-      default: null,
-    },
-    submittedAt: {
-      type: Date,
-      default: null,
-    },
-    reviewedAt: {
-      type: Date,
-      default: null,
-    },
-    reviewedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-    reviewNotes: {
-      type: String,
-      default: "",
-    },
-    rejectionReason: {
-      type: String,
-      default: "",
-    },
-    approvedAt: {
-      type: Date,
-      default: null,
-    },
-    settledAt: {
-      type: Date,
-      default: null,
-    },
+    receiptReference: { type: String, trim: true },
+    receiptNotes: { type: String, trim: true },
+    submittedAt: Date,
+    reviewedAt: Date,
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    adminNotes: { type: String, trim: true }
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-commissionStatementSchema.index({ driverId: 1, periodYear: -1, periodMonth: -1 });
-commissionStatementSchema.index(
-  { driverId: 1, periodMonth: 1, periodYear: 1 },
-  { unique: true }
-);
+commissionStatementSchema.index({ driver: 1, month: 1 });
 
-module.exports =
-  mongoose.models.CommissionStatement ||
-  mongoose.model("CommissionStatement", commissionStatementSchema);
+module.exports = mongoose.model('CommissionStatement', commissionStatementSchema);

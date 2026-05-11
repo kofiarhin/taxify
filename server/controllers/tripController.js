@@ -1,229 +1,130 @@
-const Booking = require("../models/Booking");
-const Trip = require("../models/Trip");
-const DriverProfile = require("../models/DriverProfile");
-const AuditLog = require("../models/AuditLog");
-const { env } = require("../config/env");
-const { asyncHandler } = require("../utils/asyncHandler");
-const { getPagination } = require("../utils/pagination");
-const { ApiError } = require("../utils/apiError");
-const { setDriverOnTrip, returnDriverToAvailable } = require("../services/driverStatusService");
-const { recordTripCommission } = require("../services/commissionService");
-const { calculateFare } = require("../services/fareService");
-const { BOOKING_STATUSES } = require("../constants/statuses");
-const { emitDomainEvent } = require("../socket");
+const { z } = require('zod');
+const Booking = require('../models/Booking');
+const DriverProfile = require('../models/DriverProfile');
+const Trip = require('../models/Trip');
+const { ROLES } = require('../constants/roles');
+const { BOOKING_STATUS, DRIVER_STATUS } = require('../constants/statuses');
+const ApiError = require('../utils/apiError');
+const asyncHandler = require('../utils/asyncHandler');
+const { requeueBooking } = require('../services/assignmentService');
+const { calculateFare } = require('../services/fareService');
+const { createCommissionForBooking } = require('../services/commissionService');
 
-async function getDriverProfileForUser(userId) {
-  const driver = await DriverProfile.findOne({ userId });
-  if (!driver) throw new ApiError(404, "Driver profile not found");
-  return driver;
-}
-
-const startTrip = asyncHandler(async (req, res) => {
-  const driverProfile = await getDriverProfileForUser(req.user._id);
-  const booking = await Booking.findById(req.params.bookingId);
-
-  if (!booking) throw new ApiError(404, "Booking not found");
-  if (booking.assignedDriverId?.toString() !== driverProfile._id.toString()) {
-    throw new ApiError(403, "This booking is not assigned to you");
-  }
-  if (![BOOKING_STATUSES.ACCEPTED, BOOKING_STATUSES.DRIVER_ACCEPTED].includes(booking.status)) {
-    throw new ApiError(400, "Booking must be accepted before starting the trip");
-  }
-
-  const trip = await Trip.create({
-    bookingId: booking._id,
-    driverId: driverProfile._id,
-    startedAt: new Date(),
-  });
-
-  booking.status = BOOKING_STATUSES.TRIP_IN_PROGRESS;
-  await booking.save();
-
-  await setDriverOnTrip(driverProfile._id);
-  emitDomainEvent("trip.started", {
-    bookingId: booking._id.toString(),
-    tripId: trip._id.toString(),
-    driverId: driverProfile._id.toString(),
-    status: booking.status,
-    occurredAt: new Date().toISOString(),
-  });
-
-  await AuditLog.create({
-    actorUserId: req.user._id,
-    action: "TRIP_STARTED",
-    entityType: "Trip",
-    entityId: trip._id,
-    metadata: { bookingId: booking._id },
-  });
-
-  res.status(201).json({ success: true, data: { trip, booking } });
+const endTripSchema = z.object({
+  distanceKm: z.coerce.number().min(0),
+  durationMinutes: z.coerce.number().min(0)
 });
 
-const endTrip = asyncHandler(async (req, res) => {
-  const driverProfile = await getDriverProfileForUser(req.user._id);
-  const booking = await Booking.findById(req.params.bookingId);
-
-  if (!booking) throw new ApiError(404, "Booking not found");
-  if (booking.assignedDriverId?.toString() !== driverProfile._id.toString()) {
-    throw new ApiError(403, "This booking is not assigned to you");
+const getAssigned = async (userId, bookingId) => {
+  const profile = await DriverProfile.findOne({ user: userId });
+  if (!profile) throw new ApiError(404, 'Driver profile not found', 'DRIVER_NOT_FOUND');
+  const booking = await Booking.findById(bookingId);
+  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+  if (booking.assignedDriver?.toString() !== profile._id.toString()) {
+    throw new ApiError(403, 'Only the assigned driver can change this trip', 'FORBIDDEN');
   }
-  if (![BOOKING_STATUSES.IN_PROGRESS, BOOKING_STATUSES.TRIP_IN_PROGRESS].includes(booking.status)) {
-    throw new ApiError(400, "Trip is not in progress");
+  return { booking, profile };
+};
+
+const accept = asyncHandler(async (req, res) => {
+  const { booking, profile } = await getAssigned(req.user._id, req.params.bookingId);
+  if (booking.status !== BOOKING_STATUS.DRIVER_ASSIGNED) {
+    throw new ApiError(409, 'Booking is not awaiting driver acceptance', 'INVALID_STATUS');
   }
-
-  const trip = await Trip.findOne({ bookingId: booking._id });
-  if (!trip) throw new ApiError(404, "Trip record not found");
-
-  const now = new Date();
-  const { distanceKm = null, manualFare = null, fareNotes = "" } = req.validated.body;
-  const fareResult = calculateFare({
-    durationMinutes: Math.max(1, Math.ceil((now - trip.startedAt) / 60000)),
-    distanceKm,
-    manualFare,
-    fareNotes,
-  });
-
-  trip.endedAt = now;
-  trip.durationMinutes = Math.max(1, Math.ceil((now - trip.startedAt) / 60000));
-  trip.distanceKm = distanceKm;
-  trip.fare = fareResult.fare;
-  trip.fareBreakdown = fareResult.breakdown;
-  trip.isManualFareOverride = fareResult.isManualOverride;
-  trip.fareNotes = fareResult.fareNotes;
-  trip.commissionAmount = parseFloat((trip.fare * env.COMMISSION_RATE).toFixed(2));
-  await trip.save();
-
-  trip.paymentStatus = booking.clientId
-    ? "PENDING_CLIENT_CONFIRMATION"
-    : "AWAITING_DRIVER_CONFIRMATION";
-  await trip.save();
-
-  booking.status = booking.clientId
-    ? BOOKING_STATUSES.AWAITING_CLIENT_CONFIRMATION
-    : BOOKING_STATUSES.AWAITING_DRIVER_PAYMENT_CONFIRMATION;
-  booking.finalFare = trip.fare;
-  booking.completedAt = now;
+  booking.status = BOOKING_STATUS.DRIVER_ACCEPTED;
+  booking.acceptedAt = new Date();
   await booking.save();
+  profile.lifecycleStatus = DRIVER_STATUS.ASSIGNED;
+  await profile.save();
+  res.json({ booking });
+});
 
-  await AuditLog.create({
-    actorUserId: req.user._id,
-    action: "TRIP_ENDED",
-    entityType: "Trip",
-    entityId: trip._id,
-    metadata: { fare: trip.fare, durationMinutes: trip.durationMinutes },
-  });
+const reject = asyncHandler(async (req, res) => {
+  const { booking, profile } = await getAssigned(req.user._id, req.params.bookingId);
+  if (booking.status !== BOOKING_STATUS.DRIVER_ASSIGNED) {
+    throw new ApiError(409, 'Booking is not awaiting driver acceptance', 'INVALID_STATUS');
+  }
+  const updated = await requeueBooking(booking, profile);
+  res.json({ booking: updated });
+});
 
-  emitDomainEvent("trip.ended", {
-    bookingId: booking._id.toString(),
-    tripId: trip._id.toString(),
-    driverId: driverProfile._id.toString(),
-    clientId: booking.clientId?.toString(),
-    status: booking.status,
-    occurredAt: now.toISOString(),
-  });
-  res.json({ success: true, data: { trip, booking } });
+const start = asyncHandler(async (req, res) => {
+  const { booking, profile } = await getAssigned(req.user._id, req.params.bookingId);
+  if (booking.status !== BOOKING_STATUS.DRIVER_ACCEPTED) {
+    throw new ApiError(409, 'Booking must be accepted before trip start', 'INVALID_STATUS');
+  }
+  booking.status = BOOKING_STATUS.TRIP_IN_PROGRESS;
+  booking.startedAt = new Date();
+  await booking.save();
+  profile.lifecycleStatus = DRIVER_STATUS.ON_TRIP;
+  await profile.save();
+  await Trip.findOneAndUpdate(
+    { booking: booking._id },
+    { booking: booking._id, driver: profile._id, startedAt: booking.startedAt },
+    { upsert: true, new: true }
+  );
+  res.json({ booking });
+});
+
+const end = asyncHandler(async (req, res) => {
+  const data = endTripSchema.parse(req.body);
+  const { booking, profile } = await getAssigned(req.user._id, req.params.bookingId);
+  if (booking.status !== BOOKING_STATUS.TRIP_IN_PROGRESS) {
+    throw new ApiError(409, 'Trip is not in progress', 'INVALID_STATUS');
+  }
+  const fare = calculateFare(data);
+  booking.status = BOOKING_STATUS.AWAITING_CLIENT_CONFIRMATION;
+  booking.endedAt = new Date();
+  booking.distanceKm = data.distanceKm;
+  booking.durationMinutes = data.durationMinutes;
+  booking.fare = fare;
+  await booking.save();
+  await Trip.findOneAndUpdate(
+    { booking: booking._id },
+    {
+      booking: booking._id,
+      driver: profile._id,
+      startedAt: booking.startedAt,
+      endedAt: booking.endedAt,
+      distanceKm: data.distanceKm,
+      durationMinutes: data.durationMinutes,
+      fare
+    },
+    { upsert: true, new: true }
+  );
+  res.json({ booking });
+});
+
+const confirmClient = asyncHandler(async (req, res) => {
+  const booking = await Booking.findById(req.params.bookingId);
+  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+  if (req.user.role !== ROLES.CLIENT || booking.client?.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, 'Only the booking client can confirm completion', 'FORBIDDEN');
+  }
+  if (booking.status !== BOOKING_STATUS.AWAITING_CLIENT_CONFIRMATION) {
+    throw new ApiError(409, 'Booking is not awaiting client confirmation', 'INVALID_STATUS');
+  }
+  booking.status = BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION;
+  booking.payment.status = 'CLIENT_CONFIRMED';
+  booking.payment.clientConfirmedAt = new Date();
+  await booking.save();
+  res.json({ booking });
 });
 
 const confirmPayment = asyncHandler(async (req, res) => {
-  const driverProfile = await getDriverProfileForUser(req.user._id);
-  const booking = await Booking.findById(req.params.bookingId);
-
-  if (!booking) throw new ApiError(404, "Booking not found");
-  if (booking.assignedDriverId?.toString() !== driverProfile._id.toString()) {
-    throw new ApiError(403, "This booking is not assigned to you");
+  const { booking, profile } = await getAssigned(req.user._id, req.params.bookingId);
+  if (booking.status !== BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION) {
+    throw new ApiError(409, 'Booking is not awaiting driver cash confirmation', 'INVALID_STATUS');
   }
-  if (
-    ![
-      BOOKING_STATUSES.AWAITING_DRIVER_PAYMENT_CONFIRMATION,
-      BOOKING_STATUSES.PAYMENT_PENDING,
-    ].includes(booking.status)
-  ) {
-    throw new ApiError(400, "Booking is not awaiting driver payment confirmation");
-  }
-
-  if (!booking.clientConfirmedAt && booking.clientId) {
-    throw new ApiError(400, "Client must confirm completion before payment can be recorded");
-  }
-
-  const trip = await Trip.findOne({ bookingId: booking._id });
-  if (!trip) throw new ApiError(404, "Trip record not found");
-
-  trip.paymentStatus = "PAID";
-  trip.driverConfirmedPaymentAt = new Date();
-  trip.paymentConfirmedAt = trip.driverConfirmedPaymentAt;
-  await trip.save();
-
-  booking.status = BOOKING_STATUSES.COMPLETED;
-  booking.driverPaymentConfirmedAt = trip.driverConfirmedPaymentAt;
-  booking.paymentRecordedAt = trip.driverConfirmedPaymentAt;
-  booking.paidAt = trip.driverConfirmedPaymentAt;
-  booking.completedAt = booking.completedAt ?? trip.driverConfirmedPaymentAt;
+  booking.status = BOOKING_STATUS.COMPLETED;
+  booking.payment.status = 'PAID';
+  booking.payment.driverConfirmedAt = new Date();
+  booking.completedAt = new Date();
   await booking.save();
-
-  await recordTripCommission(trip);
-  await returnDriverToAvailable(driverProfile._id);
-  emitDomainEvent("driver.confirmed_payment", {
-    bookingId: booking._id.toString(),
-    tripId: trip._id.toString(),
-    driverId: driverProfile._id.toString(),
-    clientId: booking.clientId?.toString(),
-    status: booking.status,
-    occurredAt: trip.driverConfirmedPaymentAt.toISOString(),
-  });
-  emitDomainEvent("booking.completed", {
-    bookingId: booking._id.toString(),
-    tripId: trip._id.toString(),
-    driverId: driverProfile._id.toString(),
-    clientId: booking.clientId?.toString(),
-    status: booking.status,
-    occurredAt: trip.driverConfirmedPaymentAt.toISOString(),
-  });
-  emitDomainEvent("payment.confirmed", {
-    bookingId: booking._id.toString(),
-    tripId: trip._id.toString(),
-    driverId: driverProfile._id.toString(),
-  });
-
-  await AuditLog.create({
-    actorUserId: req.user._id,
-    action: "PAYMENT_CONFIRMED",
-    entityType: "Trip",
-    entityId: trip._id,
-    metadata: { fare: trip.fare, commission: trip.commissionAmount },
-  });
-
-  res.json({ success: true, data: { trip, booking } });
+  profile.lifecycleStatus = DRIVER_STATUS.ACTIVE;
+  await profile.save();
+  await createCommissionForBooking(booking);
+  res.json({ booking });
 });
 
-const listTrips = asyncHandler(async (req, res) => {
-  const { page, limit, skip } = getPagination(req.query);
-  const [trips, total] = await Promise.all([
-    Trip.find()
-      .populate({ path: "bookingId", select: "bookingReference customerName pickupAddress dropoffAddress" })
-      .populate({ path: "driverId", select: "vehicleMake vehicleModel vehiclePlate userId" })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-    Trip.countDocuments(),
-  ]);
-
-  res.json({ success: true, data: { trips, pagination: { page, limit, total } } });
-});
-
-const getDriverTrips = asyncHandler(async (req, res) => {
-  const driverProfile = await getDriverProfileForUser(req.user._id);
-  const { page, limit, skip } = getPagination(req.query);
-
-  const [trips, total] = await Promise.all([
-    Trip.find({ driverId: driverProfile._id })
-      .populate({ path: "bookingId", select: "bookingReference customerName pickupAddress dropoffAddress" })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-    Trip.countDocuments({ driverId: driverProfile._id }),
-  ]);
-
-  res.json({ success: true, data: { trips, pagination: { page, limit, total } } });
-});
-
-module.exports = { startTrip, endTrip, confirmPayment, listTrips, getDriverTrips };
+module.exports = { accept, confirmClient, confirmPayment, end, reject, start };

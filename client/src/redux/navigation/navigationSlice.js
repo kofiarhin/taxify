@@ -1,19 +1,14 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice } from '@reduxjs/toolkit';
 
 const navigationSlice = createSlice({
-  name: "navigation",
-  initialState: {
-    sidebarOpen: false,
-  },
+  name: 'navigation',
+  initialState: { sidebarOpen: false },
   reducers: {
     toggleSidebar(state) {
       state.sidebarOpen = !state.sidebarOpen;
-    },
-    closeSidebar(state) {
-      state.sidebarOpen = false;
-    },
-  },
+    }
+  }
 });
 
-export const { toggleSidebar, closeSidebar } = navigationSlice.actions;
+export const { toggleSidebar } = navigationSlice.actions;
 export default navigationSlice.reducer;

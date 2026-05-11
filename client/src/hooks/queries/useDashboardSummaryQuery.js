@@ -1,11 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
-import { getDashboardSummary } from "../../services/dashboardService";
-import { queryKeys } from "../queryKeys";
+import { useQuery } from '@tanstack/react-query';
+import { dashboardService } from '../../services/dashboardService';
+import { queryKeys } from '../queryKeys';
 
-export function useDashboardSummaryQuery() {
-  return useQuery({
-    queryKey: queryKeys.dashboardSummary,
-    queryFn: getDashboardSummary,
-    refetchInterval: 15000,
+export const useDashboardSummaryQuery = () =>
+  useQuery({
+    queryKey: queryKeys.adminSummary,
+    queryFn: dashboardService.adminSummary
   });
-}

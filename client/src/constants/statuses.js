@@ -1,109 +1,25 @@
-export const BOOKING_STATUSES = {
-  PENDING_ASSIGNMENT: "PENDING_ASSIGNMENT",
-  QUEUED: "QUEUED",
-  DRIVER_ASSIGNED: "DRIVER_ASSIGNED",
-  DRIVER_ACCEPTED: "DRIVER_ACCEPTED",
-  TRIP_IN_PROGRESS: "TRIP_IN_PROGRESS",
-  TRIP_ENDED: "TRIP_ENDED",
-  AWAITING_CLIENT_CONFIRMATION: "AWAITING_CLIENT_CONFIRMATION",
-  AWAITING_DRIVER_PAYMENT_CONFIRMATION: "AWAITING_DRIVER_PAYMENT_CONFIRMATION",
-  ASSIGNED: "DRIVER_ASSIGNED",
-  ACCEPTED: "DRIVER_ACCEPTED",
-  REJECTED: "REJECTED",
-  IN_PROGRESS: "TRIP_IN_PROGRESS",
-  COMPLETED: "COMPLETED",
-  PAYMENT_PENDING: "AWAITING_DRIVER_PAYMENT_CONFIRMATION",
-  PAID: "COMPLETED",
-  CANCELLED: "CANCELLED",
+export const BOOKING_STATUS = {
+  PENDING_ASSIGNMENT: 'PENDING_ASSIGNMENT',
+  QUEUED: 'QUEUED',
+  DRIVER_ASSIGNED: 'DRIVER_ASSIGNED',
+  DRIVER_ACCEPTED: 'DRIVER_ACCEPTED',
+  TRIP_IN_PROGRESS: 'TRIP_IN_PROGRESS',
+  TRIP_ENDED: 'TRIP_ENDED',
+  AWAITING_CLIENT_CONFIRMATION: 'AWAITING_CLIENT_CONFIRMATION',
+  AWAITING_DRIVER_PAYMENT_CONFIRMATION: 'AWAITING_DRIVER_PAYMENT_CONFIRMATION',
+  PAID: 'PAID',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+  DISPUTED: 'DISPUTED'
 };
 
-export const DRIVER_STATUSES = {
-  PENDING_APPROVAL: "PENDING_APPROVAL",
-  ACTIVE: "ACTIVE",
-  ASSIGNED: "ASSIGNED",
-  ON_TRIP: "ON_TRIP",
-  BUSY: "ASSIGNED",
-  OFFLINE: "OFFLINE",
-  SUSPENDED: "SUSPENDED",
-  DEACTIVATED: "DEACTIVATED",
-};
-
-export const COMMISSION_STATUSES = {
-  DUE: "DUE",
-  SUBMITTED: "SUBMITTED",
-  APPROVED: "APPROVED",
-  REJECTED: "REJECTED",
-  SETTLED: "SETTLED",
-  OVERDUE: "OVERDUE",
-};
-
-export const COMPLAINT_STATUSES = {
-  OPEN: "OPEN",
-  INVESTIGATING: "INVESTIGATING",
-  RESOLVED: "RESOLVED",
-  DISMISSED: "DISMISSED",
-};
-
-export const COMPLAINT_PRIORITIES = {
-  LOW: "LOW",
-  MEDIUM: "MEDIUM",
-  HIGH: "HIGH",
-  CRITICAL: "CRITICAL",
-};
-
-export const BOOKING_STATUS_COLORS = {
-  PENDING_ASSIGNMENT: "text-amber-300",
-  QUEUED: "text-orange-300",
-  DRIVER_ASSIGNED: "text-blue-300",
-  DRIVER_ACCEPTED: "text-cyan-300",
-  TRIP_IN_PROGRESS: "text-emerald-300",
-  TRIP_ENDED: "text-yellow-300",
-  AWAITING_CLIENT_CONFIRMATION: "text-yellow-300",
-  AWAITING_DRIVER_PAYMENT_CONFIRMATION: "text-amber-300",
-  ASSIGNED: "text-blue-300",
-  ACCEPTED: "text-cyan-300",
-  IN_PROGRESS: "text-emerald-300",
-  PAYMENT_PENDING: "text-yellow-300",
-  PAID: "text-emerald-400",
-  COMPLETED: "text-zinc-400",
-  REJECTED: "text-red-300",
-  CANCELLED: "text-zinc-500",
-};
-
-export const DRIVER_STATUS_COLORS = {
-  PENDING_APPROVAL: "text-amber-300",
-  ACTIVE: "text-emerald-300",
-  ASSIGNED: "text-blue-300",
-  ON_TRIP: "text-cyan-300",
-  BUSY: "text-blue-300",
-  OFFLINE: "text-zinc-400",
-  SUSPENDED: "text-red-300",
-  DEACTIVATED: "text-zinc-600",
-};
-
-export const BOOKING_STATUS_LABELS = {
-  PENDING_ASSIGNMENT: "Finding a driver",
-  QUEUED: "Queued",
-  DRIVER_ASSIGNED: "Driver assigned",
-  DRIVER_ACCEPTED: "Driver accepted",
-  TRIP_IN_PROGRESS: "Trip in progress",
-  TRIP_ENDED: "Trip ended",
-  AWAITING_CLIENT_CONFIRMATION: "Confirm trip completion",
-  AWAITING_DRIVER_PAYMENT_CONFIRMATION: "Awaiting driver payment confirmation",
-  PAID: "Paid",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-  ASSIGNED: "Driver assigned",
-  ACCEPTED: "Driver accepted",
-  IN_PROGRESS: "Trip in progress",
-  PAYMENT_PENDING: "Payment pending",
-};
-
-export const COMMISSION_STATUS_COLORS = {
-  DUE: "text-amber-300",
-  SUBMITTED: "text-blue-300",
-  APPROVED: "text-emerald-300",
-  REJECTED: "text-red-300",
-  SETTLED: "text-zinc-400",
-  OVERDUE: "text-red-400",
+export const statusTone = {
+  COMPLETED: 'bg-teal-50 text-teal-800 border-teal-200',
+  ACTIVE: 'bg-teal-50 text-teal-800 border-teal-200',
+  QUEUED: 'bg-amber-50 text-amber-800 border-amber-200',
+  DRIVER_ASSIGNED: 'bg-sky-50 text-sky-800 border-sky-200',
+  DRIVER_ACCEPTED: 'bg-sky-50 text-sky-800 border-sky-200',
+  TRIP_IN_PROGRESS: 'bg-indigo-50 text-indigo-800 border-indigo-200',
+  DISPUTED: 'bg-rose-50 text-rose-800 border-rose-200',
+  CANCELLED: 'bg-slate-100 text-slate-700 border-slate-200'
 };

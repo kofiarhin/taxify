@@ -1,6 +1,7 @@
+node_modules/
+client/node_modules/
 .env
-node_modules
-dist
-coverage
-notes.txt
-server/uploads
+client/.env
+coverage/
+client/dist/
+*.log

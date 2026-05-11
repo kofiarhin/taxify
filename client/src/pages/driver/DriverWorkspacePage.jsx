@@ -1,179 +1,100 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { AppShell } from "../../components/shared/AppShell";
+import { useState } from 'react';
+import { ErrorState, LoadingBlock, StatusBadge } from '../../components/shared/StatusPanel';
+import { useDriverAvailabilityMutation } from '../../hooks/mutations/useDriverMutations';
 import {
-  useAcceptAssignmentMutation,
-  useRejectAssignmentMutation,
-} from "../../hooks/mutations/useTripMutations";
-import { useMyDriverProfileQuery } from "../../hooks/queries/useDriverQueries";
-import { useMyAssignmentQuery } from "../../hooks/queries/useTripQueries";
-
-const ACTIVE_TRIP_STATUSES = [
-  "ACCEPTED",
-  "DRIVER_ACCEPTED",
-  "IN_PROGRESS",
-  "TRIP_IN_PROGRESS",
-  "TRIP_ENDED",
-  "PAYMENT_PENDING",
-  "AWAITING_CLIENT_CONFIRMATION",
-  "AWAITING_DRIVER_PAYMENT_CONFIRMATION",
-];
-
-function InfoRow({ label, value }) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b border-white/8 py-3 last:border-0">
-      <p className="text-sm text-zinc-500">{label}</p>
-      <p className="text-right text-sm text-zinc-200">{value ?? "—"}</p>
-    </div>
-  );
-}
-
-function DriverRatingSummary({ driver }) {
-  const reviewCount = driver?.reviewCount ?? 0;
-  const averageRating = driver?.averageRating ?? 0;
-
-  return (
-    <div className="rounded-3xl border border-white/8 bg-white/3 p-6">
-      <p className="text-xs uppercase tracking-widest text-zinc-500">Driver rating</p>
-      {reviewCount > 0 ? (
-        <div className="mt-3 flex items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-4xl tracking-tight text-white">
-              {Number(averageRating).toFixed(1)}
-            </p>
-            <p className="mt-1 text-sm text-zinc-500">out of 5</p>
-          </div>
-          <p className="text-right text-sm text-zinc-400">
-            {reviewCount} {reviewCount === 1 ? "review" : "reviews"}
-          </p>
-        </div>
-      ) : (
-        <p className="mt-3 text-lg text-white">No reviews yet</p>
-      )}
-    </div>
-  );
-}
-
-function NoAssignment({ driver }) {
-  return (
-    <div className="grid gap-5 md:grid-cols-[1fr_0.7fr]">
-      <div className="rounded-3xl border border-white/8 bg-white/3 p-8 text-center">
-        <div className="mx-auto mb-4 h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_8px_rgba(16,185,129,0.1)]" />
-        <p className="text-lg text-white">Available for dispatch</p>
-        <p className="mt-2 text-sm text-zinc-500">
-          You will see a new booking here when dispatch assigns one to you.
-        </p>
-      </div>
-      <DriverRatingSummary driver={driver} />
-    </div>
-  );
-}
+  useAcceptTripMutation,
+  useEndTripMutation,
+  usePaymentConfirmMutation,
+  useRejectTripMutation,
+  useStartTripMutation
+} from '../../hooks/mutations/useTripMutations';
+import { useBookingsQuery } from '../../hooks/queries/useBookingQueries';
+import { useDriverProfileQuery } from '../../hooks/queries/useDriverQueries';
+import { apiErrorMessage } from '../../lib/api';
 
 export function DriverWorkspacePage() {
-  const navigate = useNavigate();
-  const [rejectReason, setRejectReason] = useState("");
+  const profileQuery = useDriverProfileQuery();
+  const bookingsQuery = useBookingsQuery();
+  const availability = useDriverAvailabilityMutation();
+  const accept = useAcceptTripMutation();
+  const reject = useRejectTripMutation();
+  const start = useStartTripMutation();
+  const end = useEndTripMutation();
+  const confirmPayment = usePaymentConfirmMutation();
+  const [tripMetrics, setTripMetrics] = useState({ distanceKm: '', durationMinutes: '' });
 
-  const { data, isLoading, isError } = useMyAssignmentQuery();
-  const { data: driverProfile } = useMyDriverProfileQuery();
-  const acceptMut = useAcceptAssignmentMutation();
-  const rejectMut = useRejectAssignmentMutation();
+  if (profileQuery.isLoading || bookingsQuery.isLoading) return <LoadingBlock lines={5} />;
+  if (profileQuery.isError) return <ErrorState message={apiErrorMessage(profileQuery.error)} />;
+  if (bookingsQuery.isError) return <ErrorState message={apiErrorMessage(bookingsQuery.error)} />;
 
-  const booking = data?.booking ?? null;
-  const attempt = data?.attempt ?? null;
+  const profile = profileQuery.data?.profile;
+  const activeBooking = bookingsQuery.data?.bookings?.find((booking) => !['COMPLETED', 'CANCELLED', 'DISPUTED'].includes(booking.status));
 
-  useEffect(() => {
-    if (booking && ACTIVE_TRIP_STATUSES.includes(booking.status)) {
-      navigate("/driver/trip", { replace: true });
-    }
-  }, [booking, navigate]);
-
-  if (isLoading) {
-    return (
-      <AppShell eyebrow="Driver workspace" title="Drive.">
-        <div className="h-40 animate-pulse rounded-3xl bg-white/6" />
-      </AppShell>
-    );
-  }
-
-  if (isError) {
-    return (
-      <AppShell eyebrow="Driver workspace" title="Drive.">
-        <div className="rounded-4xl border border-amber-300/20 bg-amber-300/10 p-5 text-amber-100">
-          Failed to load assignment data.
-        </div>
-      </AppShell>
-    );
-  }
+  const ratingText = profile?.reviewCount > 0 ? `${profile.ratingAverage} from ${profile.reviewCount} reviews` : 'No reviews yet';
 
   return (
-    <AppShell eyebrow="Driver workspace" title="Drive.">
-      {!booking && <NoAssignment driver={driverProfile} />}
-
-      {["ASSIGNED", "DRIVER_ASSIGNED"].includes(booking?.status) && attempt && (
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-white/8 bg-white/3 p-6">
-            <p className="mb-4 text-xs uppercase tracking-widest text-zinc-500">New job assigned</p>
-            <div className="divide-y divide-white/8">
-              <InfoRow label="Reference" value={booking.bookingReference} />
-              <InfoRow label="Customer" value={booking.customerName} />
-              <InfoRow label="Phone" value={booking.customerPhone} />
-              <InfoRow label="Pickup" value={booking.pickupAddress} />
-              <InfoRow label="Dropoff" value={booking.dropoffAddress} />
-              {booking.specialInstructions && (
-                <InfoRow label="Instructions" value={booking.specialInstructions} />
-              )}
-              {booking.estimatedFare != null && (
-                <InfoRow label="Est. fare" value={`GHS ${booking.estimatedFare.toFixed(2)}`} />
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-blue-300/15 bg-blue-300/5 p-6">
-            <p className="mb-1 text-sm text-zinc-300">Respond before this job expires.</p>
-            <p className="mb-5 text-xs text-zinc-500">
-              Expires: {new Date(attempt.expiresAt).toLocaleTimeString()}
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                disabled={acceptMut.isPending}
-                onClick={() =>
-                  acceptMut.mutate(attempt._id, {
-                    onSuccess: () => navigate("/driver/trip"),
-                  })
-                }
-                className="flex-1 rounded-full border border-emerald-300/30 bg-emerald-300/10 py-3 text-sm text-emerald-100 transition hover:-translate-y-px disabled:opacity-50"
-              >
-                {acceptMut.isPending ? "Accepting…" : "Accept job"}
-              </button>
-              <div className="flex flex-1 items-center gap-2">
-                <input
-                  placeholder="Reason (optional)"
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  className="flex-1 rounded-2xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-600 outline-none"
-                />
-                <button
-                  type="button"
-                  disabled={rejectMut.isPending}
-                  onClick={() =>
-                    rejectMut.mutate({ id: attempt._id, reason: rejectReason })
-                  }
-                  className="rounded-full border border-red-300/20 bg-red-300/10 px-5 py-2.5 text-sm text-red-200 transition hover:-translate-y-px disabled:opacity-50"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {[acceptMut, rejectMut].some((m) => m.isError) && (
-            <div className="rounded-4xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-200">
-              {[acceptMut, rejectMut].find((m) => m.isError)?.error?.message ?? "An error occurred"}
-            </div>
-          )}
+    <section className="grid grid-cols-1 gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+      <div className="panel space-y-5 p-6">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">Driver console</p>
+          <h2 className="mt-2 text-3xl font-black tracking-tight">{profile?.user?.name}</h2>
         </div>
-      )}
-    </AppShell>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Approval</p>
+            <StatusBadge value={profile?.approvalStatus} />
+          </div>
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Availability</p>
+            <StatusBadge value={profile?.lifecycleStatus} />
+          </div>
+        </div>
+        <p className="text-sm font-semibold text-slate-700">Rating: {ratingText}</p>
+        <div className="flex flex-wrap gap-2">
+          <button className="button-primary" onClick={() => availability.mutate({ lifecycleStatus: 'ACTIVE' })} type="button">Go active</button>
+          <button className="button-secondary" onClick={() => availability.mutate({ lifecycleStatus: 'OFFLINE' })} type="button">Go offline</button>
+        </div>
+      </div>
+      <div className="panel space-y-5 p-6">
+        <h3 className="text-2xl font-black tracking-tight">Assigned trip</h3>
+        {!activeBooking ? (
+          <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">No active booking assigned.</p>
+        ) : (
+          <div className="space-y-4">
+            <StatusBadge value={activeBooking.status} />
+            <p className="text-lg font-semibold">{activeBooking.pickupAddress} to {activeBooking.dropoffAddress}</p>
+            <p className="text-sm text-slate-600">Passenger: {activeBooking.passengerName}</p>
+            <div className="flex flex-wrap gap-2">
+              {activeBooking.status === 'DRIVER_ASSIGNED' ? (
+                <>
+                  <button className="button-primary" onClick={() => accept.mutate(activeBooking._id)} type="button">Accept</button>
+                  <button className="button-secondary" onClick={() => reject.mutate(activeBooking._id)} type="button">Reject</button>
+                </>
+              ) : null}
+              {activeBooking.status === 'DRIVER_ACCEPTED' ? (
+                <button className="button-primary" onClick={() => start.mutate(activeBooking._id)} type="button">Start trip</button>
+              ) : null}
+              {activeBooking.status === 'TRIP_IN_PROGRESS' ? (
+                <form
+                  className="grid w-full grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto]"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    end.mutate({ bookingId: activeBooking._id, payload: tripMetrics });
+                  }}
+                >
+                  <input className="field-input" placeholder="Distance km" value={tripMetrics.distanceKm} onChange={(event) => setTripMetrics((current) => ({ ...current, distanceKm: event.target.value }))} required />
+                  <input className="field-input" placeholder="Duration minutes" value={tripMetrics.durationMinutes} onChange={(event) => setTripMetrics((current) => ({ ...current, durationMinutes: event.target.value }))} required />
+                  <button className="button-primary" type="submit">End trip</button>
+                </form>
+              ) : null}
+              {activeBooking.status === 'AWAITING_DRIVER_PAYMENT_CONFIRMATION' ? (
+                <button className="button-primary" onClick={() => confirmPayment.mutate(activeBooking._id)} type="button">Confirm cash received</button>
+              ) : null}
+            </div>
+            {activeBooking.fare?.total ? <p className="font-mono text-2xl font-bold">${activeBooking.fare.total}</p> : null}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

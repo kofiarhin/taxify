@@ -1,17 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
-import { getComplaints } from "../../services/complaintService";
-import { queryKeys } from "../queryKeys";
+import { useQuery } from '@tanstack/react-query';
+import { complaintService } from '../../services/complaintService';
+import { queryKeys } from '../queryKeys';
 
-export function useComplaintsQuery(statusFilter = "") {
-  return useQuery({
-    queryKey: queryKeys.complaints(statusFilter),
-    queryFn: () => getComplaints(statusFilter ? { status: statusFilter } : {}),
+export const useComplaintsQuery = (params) =>
+  useQuery({
+    queryKey: [...queryKeys.complaints, params],
+    queryFn: () => complaintService.list(params)
   });
-}
-
-export function useAgentComplaintsQuery() {
-  return useQuery({
-    queryKey: queryKeys.agentComplaints,
-    queryFn: () => getComplaints(),
-  });
-}

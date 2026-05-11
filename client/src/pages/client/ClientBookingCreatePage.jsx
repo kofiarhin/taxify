@@ -1,96 +1,39 @@
-import { useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { AppShell } from "../../components/shared/AppShell";
-import { useCreateClientBookingMutation } from "../../hooks/mutations/useClientBookingMutations";
-
-function Field({ label, error, helper, children }) {
-  return (
-    <label className="grid gap-2">
-      <span className="text-sm text-zinc-300">{label}</span>
-      {children}
-      {error ? (
-        <span className="text-sm text-amber-300">{error}</span>
-      ) : (
-        <span className="text-sm text-zinc-600">{helper}</span>
-      )}
-    </label>
-  );
-}
+import { useState } from 'react';
+import { apiErrorMessage } from '../../lib/api';
+import { useCreateBookingMutation } from '../../hooks/mutations/useBookingMutations';
 
 export function ClientBookingCreatePage() {
-  const navigate = useNavigate();
-  const createMut = useCreateClientBookingMutation({
-    onSuccess: () => navigate("/client/bookings/current"),
-  });
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm({
-    defaultValues: {
-      pickupAddress: "",
-      dropoffAddress: "",
-      pickupTime: "",
-      specialInstructions: "",
-    },
-  });
+  const [form, setForm] = useState({ pickupAddress: '', dropoffAddress: '' });
+  const mutation = useCreateBookingMutation();
+  const update = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
 
-  function onSubmit(values) {
-    createMut.mutate(values);
-  }
+  const submit = (event) => {
+    event.preventDefault();
+    mutation.mutate(form);
+  };
 
   return (
-    <AppShell
-      eyebrow="Client booking"
-      title="Request a ride."
-      summary="Add the trip details. Dispatch will assign an active driver or queue the request."
-    >
-      <form onSubmit={handleSubmit(onSubmit)} className="grid gap-5 rounded-3xl border border-white/8 bg-white/3 p-6">
-        <div className="grid gap-5 md:grid-cols-2">
-          <Field label="Pickup address" error={errors.pickupAddress?.message} helper="Include a landmark when useful.">
-            <input
-              {...register("pickupAddress", { required: "Pickup address is required", minLength: { value: 5, message: "Enter a more specific pickup address" } })}
-              className="rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-white outline-none transition focus:border-emerald-300/40"
-            />
-          </Field>
-          <Field label="Dropoff address" error={errors.dropoffAddress?.message} helper="Use the final destination.">
-            <input
-              {...register("dropoffAddress", { required: "Dropoff address is required", minLength: { value: 5, message: "Enter a more specific dropoff address" } })}
-              className="rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-white outline-none transition focus:border-emerald-300/40"
-            />
-          </Field>
-        </div>
-
-        <Field label="Pickup time" error={errors.pickupTime?.message} helper="Choose when the driver should arrive.">
-          <input
-            type="datetime-local"
-            {...register("pickupTime", { required: "Pickup time is required" })}
-            className="rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-white outline-none transition focus:border-emerald-300/40"
-          />
-        </Field>
-
-        <Field label="Special instructions" error={errors.specialInstructions?.message} helper="Optional notes for the driver.">
-          <textarea
-            rows={4}
-            {...register("specialInstructions", { maxLength: { value: 500, message: "Keep instructions under 500 characters" } })}
-            className="resize-none rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-white outline-none transition focus:border-emerald-300/40"
-          />
-        </Field>
-
-        {createMut.isError && (
-          <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-200">
-            {createMut.error?.message ?? "Could not create booking"}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={createMut.isPending}
-          className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-5 py-3 text-sm text-emerald-100 transition hover:-translate-y-px active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {createMut.isPending ? "Creating booking..." : "Create booking"}
+    <section className="grid grid-cols-1 gap-6 md:grid-cols-[0.9fr_1.1fr]">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">Client ride request</p>
+        <h2 className="mt-2 text-4xl font-black tracking-tight">Book a ride</h2>
+        <p className="mt-4 text-slate-600">The system assigns an approved active driver or places the booking in the queue.</p>
+      </div>
+      <form className="panel space-y-4 p-6" onSubmit={submit}>
+        <label className="field">
+          <span className="field-label">Pickup address</span>
+          <input className="field-input" name="pickupAddress" value={form.pickupAddress} onChange={update} required />
+        </label>
+        <label className="field">
+          <span className="field-label">Dropoff address</span>
+          <input className="field-input" name="dropoffAddress" value={form.dropoffAddress} onChange={update} required />
+        </label>
+        {mutation.isError ? <p className="text-sm font-medium text-rose-700">{apiErrorMessage(mutation.error)}</p> : null}
+        {mutation.isSuccess ? <p className="text-sm font-medium text-teal-800">Booking created: {mutation.data.booking.status.replaceAll('_', ' ')}</p> : null}
+        <button className="button-primary" type="submit" disabled={mutation.isPending}>
+          Request ride
         </button>
       </form>
-    </AppShell>
+    </section>
   );
 }

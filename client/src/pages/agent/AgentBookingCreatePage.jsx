@@ -1,141 +1,41 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
-import { AppShell } from "../../components/shared/AppShell";
-import { useCreateBookingMutation } from "../../hooks/mutations/useBookingMutations";
-
-function Field({ label, error, children }) {
-  return (
-    <label className="grid gap-2">
-      <span className="text-sm text-zinc-300">{label}</span>
-      {children}
-      {error && <span className="text-sm text-amber-300">{error.message}</span>}
-    </label>
-  );
-}
-
-function Input({ className = "", ...props }) {
-  return (
-    <input
-      className={`rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-300/40 ${className}`}
-      {...props}
-    />
-  );
-}
+import { useState } from 'react';
+import { apiErrorMessage } from '../../lib/api';
+import { useCreateBookingMutation } from '../../hooks/mutations/useBookingMutations';
 
 export function AgentBookingCreatePage() {
-  const navigate = useNavigate();
-  const [defaultPickupTime] = useState(() =>
-    new Date(Date.now() + 5 * 60000).toISOString().slice(0, 16)
-  );
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm({
-    defaultValues: {
-      pickupTime: defaultPickupTime,
-    },
-  });
+  const [form, setForm] = useState({ passengerName: '', passengerPhone: '', pickupAddress: '', dropoffAddress: '' });
+  const mutation = useCreateBookingMutation();
+  const update = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
 
-  const mutation = useCreateBookingMutation({
-    onSuccess: () => navigate("/agent"),
-  });
-
-  function onSubmit(values) {
-    mutation.mutate({
-      ...values,
-      estimatedFare: values.estimatedFare ? parseFloat(values.estimatedFare) : null,
-      pickupTime: new Date(values.pickupTime).toISOString(),
-    });
-  }
+  const submit = (event) => {
+    event.preventDefault();
+    mutation.mutate(form);
+  };
 
   return (
-    <AppShell eyebrow="Agent workspace" title="New booking.">
-      <form onSubmit={handleSubmit(onSubmit)} className="max-w-xl space-y-5">
-        <Field label="Customer name" error={errors.customerName}>
-          <Input
-            placeholder="Full name"
-            {...register("customerName", { required: "Required" })}
-          />
-        </Field>
-
-        <Field label="Customer phone" error={errors.customerPhone}>
-          <Input
-            placeholder="+233 ..."
-            {...register("customerPhone", { required: "Required" })}
-          />
-        </Field>
-
-        <Field label="Pickup address" error={errors.pickupAddress}>
-          <Input
-            placeholder="Street, area, landmark"
-            {...register("pickupAddress", { required: "Required" })}
-          />
-        </Field>
-
-        <Field label="Dropoff address" error={errors.dropoffAddress}>
-          <Input
-            placeholder="Destination address"
-            {...register("dropoffAddress", { required: "Required" })}
-          />
-        </Field>
-
-        <Field label="Pickup time" error={errors.pickupTime}>
-          <Input
-            type="datetime-local"
-            {...register("pickupTime", { required: "Required" })}
-          />
-        </Field>
-
-        <Field label="Estimated fare (GHS, optional)" error={errors.estimatedFare}>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="0.00"
-            {...register("estimatedFare")}
-          />
-        </Field>
-
-        <Field label="Special instructions" error={errors.specialInstructions}>
-          <textarea
-            placeholder="Any notes for the driver"
-            rows={3}
-            className="resize-none rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-300/40"
-            {...register("specialInstructions")}
-          />
-        </Field>
-
-        {mutation.isError && (
-          <div className="rounded-4xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-200">
-            {mutation.error?.response?.data?.message ?? "Failed to create booking"}
-          </div>
-        )}
-
-        {mutation.isSuccess && (
-          <div className="rounded-4xl border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-200">
-            Booking created and dispatched.
-          </div>
-        )}
-
-        <div className="flex gap-3 pt-2">
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="rounded-full border border-emerald-300/20 bg-emerald-300/14 px-6 py-3 text-sm text-emerald-100 transition hover:-translate-y-px disabled:opacity-50"
-          >
-            {mutation.isPending ? "Creating..." : "Create and dispatch"}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate("/agent")}
-            className="rounded-full border border-white/10 px-6 py-3 text-sm text-zinc-400 transition hover:text-zinc-100"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    </AppShell>
+    <form className="panel space-y-4 p-5" onSubmit={submit}>
+      <h3 className="text-xl font-bold">Create walk-in booking</h3>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label className="field">
+          <span className="field-label">Passenger name</span>
+          <input className="field-input" name="passengerName" value={form.passengerName} onChange={update} required />
+        </label>
+        <label className="field">
+          <span className="field-label">Passenger phone</span>
+          <input className="field-input" name="passengerPhone" value={form.passengerPhone} onChange={update} />
+        </label>
+      </div>
+      <label className="field">
+        <span className="field-label">Pickup address</span>
+        <input className="field-input" name="pickupAddress" value={form.pickupAddress} onChange={update} required />
+      </label>
+      <label className="field">
+        <span className="field-label">Dropoff address</span>
+        <input className="field-input" name="dropoffAddress" value={form.dropoffAddress} onChange={update} required />
+      </label>
+      {mutation.isError ? <p className="text-sm text-rose-700">{apiErrorMessage(mutation.error)}</p> : null}
+      {mutation.isSuccess ? <p className="text-sm text-teal-800">Booking created: {mutation.data.booking.status.replaceAll('_', ' ')}</p> : null}
+      <button className="button-primary" type="submit">Create booking</button>
+    </form>
   );
 }

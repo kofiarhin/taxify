@@ -1,84 +1,68 @@
-const Complaint = require("../models/Complaint");
-const AuditLog = require("../models/AuditLog");
-const { asyncHandler } = require("../utils/asyncHandler");
-const { getPagination } = require("../utils/pagination");
-const { ApiError } = require("../utils/apiError");
-const { COMPLAINT_STATUSES } = require("../constants/statuses");
+const { z } = require('zod');
+const Booking = require('../models/Booking');
+const Complaint = require('../models/Complaint');
+const { ROLES } = require('../constants/roles');
+const { BOOKING_STATUS } = require('../constants/statuses');
+const ApiError = require('../utils/apiError');
+const asyncHandler = require('../utils/asyncHandler');
+
+const createSchema = z.object({
+  booking: z.string().optional(),
+  targetDriver: z.string().optional(),
+  type: z.enum(['COMPLAINT', 'DISPUTE']).default('COMPLAINT'),
+  title: z.string().min(3),
+  description: z.string().min(5)
+});
+
+const updateSchema = z.object({
+  status: z.enum(['OPEN', 'IN_REVIEW', 'RESOLVED', 'REJECTED']).optional(),
+  adminNotes: z.string().optional()
+});
 
 const createComplaint = asyncHandler(async (req, res) => {
-  const body = req.validated.body;
+  const data = createSchema.parse(req.body);
+  let booking;
+
+  if (data.booking) {
+    booking = await Booking.findById(data.booking);
+    if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+    if (req.user.role === ROLES.CLIENT && booking.client?.toString() !== req.user._id.toString()) {
+      throw new ApiError(403, 'Cannot complain on this booking', 'FORBIDDEN');
+    }
+  }
+
   const complaint = await Complaint.create({
-    ...body,
-    bookingId: body.bookingId || null,
-    driverId: body.driverId || null,
-    reportedByUserId: req.user._id,
+    ...data,
+    createdBy: req.user._id,
+    targetDriver: data.targetDriver || booking?.assignedDriver
   });
 
-  res.status(201).json({ success: true, data: { complaint } });
+  if (booking && data.type === 'DISPUTE') {
+    booking.status = BOOKING_STATUS.DISPUTED;
+    booking.disputedAt = new Date();
+    await booking.save();
+  }
+
+  res.status(201).json({ complaint });
 });
 
 const listComplaints = asyncHandler(async (req, res) => {
-  const { page, limit, skip } = getPagination(req.query);
   const filter = {};
+  if (req.user.role === ROLES.CLIENT) filter.createdBy = req.user._id;
   if (req.query.status) filter.status = req.query.status;
-
-  const [complaints, total] = await Promise.all([
-    Complaint.find(filter)
-      .populate("reportedByUserId", "fullName email role")
-      .populate("assignedToUserId", "fullName")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-    Complaint.countDocuments(filter),
-  ]);
-
-  res.json({ success: true, data: { complaints, pagination: { page, limit, total } } });
-});
-
-const getComplaint = asyncHandler(async (req, res) => {
-  const complaint = await Complaint.findById(req.params.id)
-    .populate("reportedByUserId", "fullName email role")
-    .populate("assignedToUserId", "fullName");
-
-  if (!complaint) throw new ApiError(404, "Complaint not found");
-  res.json({ success: true, data: { complaint } });
+  const complaints = await Complaint.find(filter)
+    .populate('createdBy', 'name email role')
+    .populate('booking')
+    .populate({ path: 'targetDriver', populate: { path: 'user', select: 'name email phone' } })
+    .sort({ createdAt: -1 });
+  res.json({ complaints });
 });
 
 const updateComplaint = asyncHandler(async (req, res) => {
-  const complaint = await Complaint.findById(req.params.id);
-  if (!complaint) throw new ApiError(404, "Complaint not found");
-
-  const { status, assignedToUserId, resolutionNotes } = req.validated.body;
-  if (status) complaint.status = status;
-  if (assignedToUserId !== undefined) complaint.assignedToUserId = assignedToUserId || null;
-  if (resolutionNotes !== undefined) complaint.resolutionNotes = resolutionNotes;
-  await complaint.save();
-
-  res.json({ success: true, data: { complaint } });
+  const data = updateSchema.parse(req.body);
+  const complaint = await Complaint.findByIdAndUpdate(req.params.complaintId, data, { new: true });
+  if (!complaint) throw new ApiError(404, 'Complaint not found', 'COMPLAINT_NOT_FOUND');
+  res.json({ complaint });
 });
 
-const resolveComplaint = asyncHandler(async (req, res) => {
-  const complaint = await Complaint.findById(req.params.id);
-  if (!complaint) throw new ApiError(404, "Complaint not found");
-
-  if (complaint.status === COMPLAINT_STATUSES.RESOLVED) {
-    throw new ApiError(400, "Complaint is already resolved");
-  }
-
-  complaint.status = COMPLAINT_STATUSES.RESOLVED;
-  complaint.resolutionNotes = req.validated.body.resolutionNotes;
-  complaint.resolvedAt = new Date();
-  await complaint.save();
-
-  await AuditLog.create({
-    actorUserId: req.user._id,
-    action: "COMPLAINT_RESOLVED",
-    entityType: "Complaint",
-    entityId: complaint._id,
-    metadata: { resolutionNotes: complaint.resolutionNotes },
-  });
-
-  res.json({ success: true, data: { complaint } });
-});
-
-module.exports = { createComplaint, listComplaints, getComplaint, updateComplaint, resolveComplaint };
+module.exports = { createComplaint, listComplaints, updateComplaint };

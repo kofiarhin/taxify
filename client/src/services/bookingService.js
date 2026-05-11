@@ -1,31 +1,9 @@
-import { api } from "../lib/api";
+import { api } from '../lib/api';
 
-export async function getBookings(params = {}) {
-  const response = await api.get("/bookings", { params });
-  return response.data.data;
-}
-
-export async function getBooking(id) {
-  const response = await api.get(`/bookings/${id}`);
-  return response.data.data.booking;
-}
-
-export async function createBooking(payload) {
-  const response = await api.post("/bookings", payload);
-  return response.data.data.booking;
-}
-
-export async function cancelBooking(id, reason = "") {
-  const response = await api.post(`/bookings/${id}/cancel`, { reason });
-  return response.data.data.booking;
-}
-
-export async function retryAssignment(id) {
-  const response = await api.post(`/bookings/${id}/retry-assignment`);
-  return response.data.data.booking;
-}
-
-export async function getQueue() {
-  const response = await api.get("/bookings/queue");
-  return response.data.data.bookings;
-}
+export const bookingService = {
+  list: (params) => api.get('/bookings', { params }).then((res) => res.data),
+  create: (payload) => api.post('/bookings', payload).then((res) => res.data),
+  retry: (bookingId) => api.post(`/bookings/${bookingId}/retry-assignment`).then((res) => res.data),
+  cancel: (bookingId) => api.post(`/bookings/${bookingId}/cancel`).then((res) => res.data),
+  dispute: (bookingId) => api.post(`/bookings/${bookingId}/dispute`).then((res) => res.data)
+};
