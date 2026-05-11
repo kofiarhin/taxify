@@ -4,11 +4,11 @@ This file is the live resume state for the active workflow. Keep it current afte
 
 ## Current Request
 
-Fix `bookingService.js:5 POST http://localhost:5000/api/bookings 500 (Internal Server Error)`.
+Audit the current codebase and ensure that it aligns with `taxify-project-brief.md`. Make sure all features are fully implemented and all matching tests pass.
 
 ## Request ID
 
-`2026-05-13-fix-booking-create-500`
+`2026-05-13-taxify-brief-audit-remediation`
 
 ## Current Phase
 
@@ -20,27 +20,27 @@ Fix `bookingService.js:5 POST http://localhost:5000/api/bookings 500 (Internal S
 
 ## Current Spec File
 
-`_spec/2026-05-13-fix-booking-create-500.md`
+`_spec/2026-05-13-taxify-brief-audit-remediation.md`
 
 ## Current Task Plan File
 
-`_task/2026-05-13-fix-booking-create-500.md`
+`_task/2026-05-13-taxify-brief-audit-remediation.md`
 
 ## Current Review File
 
-`_review/2026-05-13-fix-booking-create-500.md`
+`_review/2026-05-13-taxify-brief-audit-remediation.md`
 
 ## Current Release Notes File
 
-`_release/2026-05-13-fix-booking-create-500.md`
+`_release/2026-05-13-taxify-brief-audit-remediation.md`
 
 ## Current Summary File
 
-`_summary/2026-05-13-fix-booking-create-500.md`
+`_summary/2026-05-13-taxify-brief-audit-remediation.md`
 
 ## Last Completed Task
 
-`BOOKING-500 TASK-001: Make booking creation return controlled responses`
+`TASK-003: Final audit, documentation, and workflow closure`
 
 ## Current Task
 
@@ -52,11 +52,11 @@ Fix `bookingService.js:5 POST http://localhost:5000/api/bookings 500 (Internal S
 
 ## Dirty Worktree Status
 
-`Broad dirty worktree remains from prior scaffold workflow and unrelated pre-existing deletions. This workflow changed only the work request, workflow artifacts, booking controller/service, and dispatch lifecycle tests. Planned backend files were already dirty and were edited narrowly.`
+`Final dirty worktree contains only intentional source, test, docs, and workflow artifact changes for this audit/remediation request. No generated dist files or secrets were added.`
 
 ## Acceptance Status
 
-`complete: all BOOKING-500 TASK-001 acceptance criteria checked`
+`complete: all TASK-001, TASK-002, and TASK-003 acceptance criteria checked`
 
 ## Blockers
 
@@ -64,7 +64,7 @@ Fix `bookingService.js:5 POST http://localhost:5000/api/bookings 500 (Internal S
 
 ## Verification Status
 
-`passed: npm test -- --runTestsByPath server/tests/dispatchLifecycle.test.js; npm test`
+`passed: npm test; cd client && npm test; cd client && npm run build; git diff --stat; targeted git diff; git -c core.excludesfile= status --short`
 
 ## Workflow Health Status
 
@@ -72,11 +72,13 @@ Fix `bookingService.js:5 POST http://localhost:5000/api/bookings 500 (Internal S
 
 ## Suggested Next Prompt
 
-`Restart backend and retry booking creation`
+`Review and commit the Taxify brief remediation changes`
 
 ## Notes For Continuation
 
-- Booking input now trims address/passenger fields before persistence.
-- Whitespace-only pickup/dropoff input returns a controlled `VALIDATION_ERROR` 400.
-- Assignment audit attempt writes are non-blocking and logged outside test mode.
-- Final review, release notes, and summary are complete.
+- MVP remains REST-only; no Socket.IO was added.
+- Backend now records `Booking.statusHistory` and keeps `PAID` before `COMPLETED` in the lifecycle.
+- Admin booking REST controls now include reassign and complete override.
+- Admin booking UI now exposes retry, reassign, complete, cancel, and dispute.
+- Backend tests now cover 12 tests; frontend tests now cover 3 tests.
+- Initial sandboxed Node verification failed with `EPERM` on `C:\Users\laura.bolas`; approved escalated reruns passed.

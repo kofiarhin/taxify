@@ -1,0 +1,45 @@
+const { BOOKING_STATUS, DRIVER_STATUS } = require('../constants/statuses');
+const ApiError = require('../utils/apiError');
+const DriverProfile = require('../models/DriverProfile');
+const { createCommissionForBooking } = require('./commissionService');
+
+const setBookingStatus = (booking, status, { actor, note } = {}) => {
+  booking.status = status;
+  booking.statusHistory = booking.statusHistory || [];
+  booking.statusHistory.push({
+    status,
+    changedAt: new Date(),
+    actor,
+    note
+  });
+  return booking;
+};
+
+const finalizePaidBooking = async (booking, { actor, note = 'Booking completed' } = {}) => {
+  if (!booking.assignedDriver) {
+    throw new ApiError(409, 'Booking must have an assigned driver before completion', 'BOOKING_NO_DRIVER');
+  }
+
+  if (!booking.fare?.total || booking.fare.total <= 0) {
+    throw new ApiError(409, 'Booking must have a calculated fare before completion', 'BOOKING_NO_FARE');
+  }
+
+  if (!booking.payment?.clientConfirmedAt || !['CLIENT_CONFIRMED', 'PAID'].includes(booking.payment.status)) {
+    throw new ApiError(409, 'Client completion confirmation is required', 'CLIENT_CONFIRMATION_REQUIRED');
+  }
+
+  booking.payment.status = 'PAID';
+  booking.payment.driverConfirmedAt = booking.payment.driverConfirmedAt || new Date();
+  setBookingStatus(booking, BOOKING_STATUS.PAID, { actor, note: 'Cash payment recorded' });
+  await booking.save();
+
+  setBookingStatus(booking, BOOKING_STATUS.COMPLETED, { actor, note });
+  booking.completedAt = booking.completedAt || new Date();
+  await booking.save();
+
+  await DriverProfile.findByIdAndUpdate(booking.assignedDriver, { lifecycleStatus: DRIVER_STATUS.ACTIVE });
+  await createCommissionForBooking(booking);
+  return booking;
+};
+
+module.exports = { finalizePaidBooking, setBookingStatus };

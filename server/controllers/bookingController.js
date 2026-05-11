@@ -5,7 +5,8 @@ const { ROLES } = require('../constants/roles');
 const { BOOKING_STATUS, DRIVER_STATUS } = require('../constants/statuses');
 const ApiError = require('../utils/apiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { assignAvailableDriver, retryAssignment } = require('../services/assignmentService');
+const { assignAvailableDriver, reassignBooking, retryAssignment } = require('../services/assignmentService');
+const { finalizePaidBooking, setBookingStatus } = require('../services/bookingLifecycleService');
 
 const optionalTrimmedString = () =>
   z
@@ -41,6 +42,7 @@ const createBooking = asyncHandler(async (req, res) => {
     dropoffAddress: data.dropoffAddress
   });
 
+  setBookingStatus(booking, BOOKING_STATUS.PENDING_ASSIGNMENT, { actor: req.user._id, note: 'Booking created' });
   await assignAvailableDriver(booking);
   const hydrated = await populateBooking(Booking.findById(booking._id));
   res.status(201).json({ booking: hydrated });
@@ -79,8 +81,12 @@ const getBooking = asyncHandler(async (req, res) => {
 });
 
 const retry = asyncHandler(async (req, res) => {
+  const current = await Booking.findById(req.params.bookingId);
+  if (!current) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+  if (![BOOKING_STATUS.PENDING_ASSIGNMENT, BOOKING_STATUS.QUEUED].includes(current.status)) {
+    throw new ApiError(409, 'Only queued or pending bookings can retry assignment', 'BOOKING_NOT_RETRYABLE');
+  }
   const booking = await retryAssignment(req.params.bookingId);
-  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
   const hydrated = await populateBooking(Booking.findById(booking._id));
   res.json({ booking: hydrated });
 });
@@ -103,7 +109,7 @@ const cancelBooking = asyncHandler(async (req, res) => {
     await DriverProfile.findByIdAndUpdate(booking.assignedDriver, { lifecycleStatus: DRIVER_STATUS.ACTIVE });
   }
 
-  booking.status = BOOKING_STATUS.CANCELLED;
+  setBookingStatus(booking, BOOKING_STATUS.CANCELLED, { actor: req.user._id, note: 'Booking cancelled' });
   booking.cancelledAt = new Date();
   await booking.save();
   res.json({ booking });
@@ -112,10 +118,51 @@ const cancelBooking = asyncHandler(async (req, res) => {
 const disputeBooking = asyncHandler(async (req, res) => {
   const booking = await Booking.findById(req.params.bookingId);
   if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
-  booking.status = BOOKING_STATUS.DISPUTED;
+  setBookingStatus(booking, BOOKING_STATUS.DISPUTED, { actor: req.user._id, note: 'Booking disputed' });
   booking.disputedAt = new Date();
   await booking.save();
   res.json({ booking });
 });
 
-module.exports = { cancelBooking, createBooking, disputeBooking, getBooking, listBookings, retry };
+const reassign = asyncHandler(async (req, res) => {
+  const booking = await Booking.findById(req.params.bookingId);
+  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+
+  const reassignable = [
+    BOOKING_STATUS.PENDING_ASSIGNMENT,
+    BOOKING_STATUS.QUEUED,
+    BOOKING_STATUS.DRIVER_ASSIGNED,
+    BOOKING_STATUS.DRIVER_ACCEPTED
+  ];
+  if (!reassignable.includes(booking.status)) {
+    throw new ApiError(409, 'Only pre-trip bookings can be reassigned', 'BOOKING_NOT_REASSIGNABLE');
+  }
+
+  const updated = await reassignBooking(booking, { actor: req.user._id });
+  const hydrated = await populateBooking(Booking.findById(updated._id));
+  res.json({ booking: hydrated });
+});
+
+const completeOverride = asyncHandler(async (req, res) => {
+  const booking = await Booking.findById(req.params.bookingId);
+  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+
+  if (![BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION, BOOKING_STATUS.PAID].includes(booking.status)) {
+    throw new ApiError(409, 'Booking is not ready for admin completion', 'BOOKING_NOT_COMPLETABLE');
+  }
+
+  const completed = await finalizePaidBooking(booking, { actor: req.user._id, note: 'Admin completed booking' });
+  const hydrated = await populateBooking(Booking.findById(completed._id));
+  res.json({ booking: hydrated });
+});
+
+module.exports = {
+  cancelBooking,
+  completeOverride,
+  createBooking,
+  disputeBooking,
+  getBooking,
+  listBookings,
+  reassign,
+  retry
+};

@@ -31,6 +31,14 @@ const bookingSchema = new mongoose.Schema(
       clientConfirmedAt: Date,
       driverConfirmedAt: Date
     },
+    statusHistory: [
+      {
+        status: { type: String, enum: Object.values(BOOKING_STATUS), required: true },
+        changedAt: { type: Date, default: Date.now },
+        actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        note: { type: String, trim: true }
+      }
+    ],
     acceptedAt: Date,
     startedAt: Date,
     endedAt: Date,

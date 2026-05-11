@@ -238,3 +238,42 @@ After appending each task entry, update `_handoff/current.md` with the latest cu
 - Review result: Reviewed; scope remained limited to booking create error handling and tests. No secrets added.
 - Blockers: none
 - Next step: Final diff audit, review, release notes, summary, and final response.
+
+### 2026-05-13 09:20 - BRIEF-AUDIT TASK-001
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `server/models/Booking.js`, `server/services/bookingLifecycleService.js`, `server/services/assignmentService.js`, `server/controllers/bookingController.js`, `server/controllers/tripController.js`, `server/controllers/complaintController.js`, `server/routes/bookingRoutes.js`, `server/tests/dispatchLifecycle.test.js`, `server/tests/operations.test.js`, `_spec/2026-05-13-taxify-brief-audit-remediation.md`, `_task/2026-05-13-taxify-brief-audit-remediation.md`, `_handoff/current.md`
+- Dirty worktree protection: Planning status showed only `M WORK_REQUEST.md`; TASK-001 edits intentionally touched backend lifecycle files and backend tests.
+- Acceptance result: `[x]` admin reassign releases the prior driver; `[x]` reassignment chooses another approved active driver; `[x]` no-driver assignment remains queued; `[x]` admin completion override requires fare/client confirmation and records cash payment; `[x]` driver payment confirmation records `PAID` before `COMPLETED`; `[x]` backend tests pass.
+- Verification result: `npm test -- --runTestsByPath server/tests/dispatchLifecycle.test.js server/tests/operations.test.js` passed 2 suites/10 tests. `npm test` passed 3 suites/12 tests.
+- Failure recovery notes: none
+- Review result: Reviewed; lifecycle helper keeps status history centralized for future event publishing and avoids changing public response shape.
+- Blockers: none
+- Next step: TASK-002
+
+### 2026-05-13 09:35 - BRIEF-AUDIT TASK-002
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `client/src/services/bookingService.js`, `client/src/pages/admin/AdminBookingsPage.jsx`, `client/test/AdminBookingsPage.test.jsx`, `_task/2026-05-13-taxify-brief-audit-remediation.md`, `_progress/progress.md`, `_handoff/current.md`
+- Dirty worktree protection: TASK-002 intentionally touched the admin booking page, booking service, and frontend tests only.
+- Acceptance result: `[x]` admin booking page exposes retry/reassign/complete/cancel/dispute controls; `[x]` responsive wrapping and existing Tailwind patterns retained; `[x]` loading/empty/error conventions retained; `[x]` frontend tests now cover an MVP screen beyond login; `[x]` frontend tests and build pass.
+- Verification result: `cd client && npm test` passed 2 suites/3 tests. `cd client && npm run build` passed.
+- Failure recovery notes: none
+- Review result: Reviewed with `design-taste-frontend` pre-flight: Redux unchanged and appropriate, mobile wraps through grid/flex, no `h-screen`, no new effects/animations, loading/empty/error states present, cards are limited to existing panel rows, no CPU-heavy animation introduced.
+- Blockers: none
+- Next step: TASK-003
+
+### 2026-05-13 09:50 - BRIEF-AUDIT TASK-003
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `_task/2026-05-13-taxify-brief-audit-remediation.md`, `_progress/progress.md`, `_handoff/current.md`, `_review/2026-05-13-taxify-brief-audit-remediation.md`, `_release/2026-05-13-taxify-brief-audit-remediation.md`, `_summary/2026-05-13-taxify-brief-audit-remediation.md`, `docs/PROJECT_CONTEXT.md`
+- Dirty worktree protection: Final status shows only intentional source, test, docs, and workflow artifact changes.
+- Acceptance result: `[x]` backend tests passed; `[x]` frontend tests passed; `[x]` frontend build passed; `[x]` final diff audit completed; `[x]` review/release/summary/handoff updated; `[x]` workflow health recorded.
+- Verification result: `npm test` passed 3 suites/12 tests. `cd client && npm test` passed 2 suites/3 tests. `cd client && npm run build` passed. `git diff --stat`, targeted `git diff`, and `git -c core.excludesfile= status --short` completed.
+- Failure recovery notes: Initial sandboxed Node commands failed with `EPERM: operation not permitted, lstat 'C:\Users\laura.bolas'`; approved escalated reruns passed. No implementation verification failed.
+- Review result: Reviewed; workflow health Passed.
+- Blockers: none
+- Next step: Final response.

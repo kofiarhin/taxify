@@ -55,10 +55,12 @@ none configured
 - API conventions: REST API under `/api`, Bearer JWT auth, controllers delegate domain work to services where useful.
 - State management conventions: Redux Toolkit stores auth/client UI state; TanStack Query handles server state through custom hooks.
 - Error handling conventions: centralized Express error middleware returns `{ error: { code, message } }`.
+- Booking lifecycle conventions: current status lives on `Booking.status`; audited transitions are also appended to `Booking.statusHistory` so the REST MVP can later emit real-time events without losing transition order.
 
 ## Architecture Rules
 
 - REST endpoints are the transport for this phase; lifecycle services should remain easy to wrap with future real-time notifications.
+- Admin booking operations include cancel, dispute, reassign, retry assignment, and completion override through REST endpoints under `/api/bookings/:bookingId`.
 - Frontend API calls go through `client/src/lib/api.js`; service files and query/mutation hooks wrap server calls.
 - Backend validates required environment variables at startup.
 

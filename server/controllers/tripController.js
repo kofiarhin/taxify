@@ -7,8 +7,8 @@ const { BOOKING_STATUS, DRIVER_STATUS } = require('../constants/statuses');
 const ApiError = require('../utils/apiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { requeueBooking } = require('../services/assignmentService');
+const { finalizePaidBooking, setBookingStatus } = require('../services/bookingLifecycleService');
 const { calculateFare } = require('../services/fareService');
-const { createCommissionForBooking } = require('../services/commissionService');
 
 const endTripSchema = z.object({
   distanceKm: z.coerce.number().min(0),
@@ -31,7 +31,7 @@ const accept = asyncHandler(async (req, res) => {
   if (booking.status !== BOOKING_STATUS.DRIVER_ASSIGNED) {
     throw new ApiError(409, 'Booking is not awaiting driver acceptance', 'INVALID_STATUS');
   }
-  booking.status = BOOKING_STATUS.DRIVER_ACCEPTED;
+  setBookingStatus(booking, BOOKING_STATUS.DRIVER_ACCEPTED, { actor: req.user._id, note: 'Driver accepted booking' });
   booking.acceptedAt = new Date();
   await booking.save();
   profile.lifecycleStatus = DRIVER_STATUS.ASSIGNED;
@@ -53,7 +53,7 @@ const start = asyncHandler(async (req, res) => {
   if (booking.status !== BOOKING_STATUS.DRIVER_ACCEPTED) {
     throw new ApiError(409, 'Booking must be accepted before trip start', 'INVALID_STATUS');
   }
-  booking.status = BOOKING_STATUS.TRIP_IN_PROGRESS;
+  setBookingStatus(booking, BOOKING_STATUS.TRIP_IN_PROGRESS, { actor: req.user._id, note: 'Trip started' });
   booking.startedAt = new Date();
   await booking.save();
   profile.lifecycleStatus = DRIVER_STATUS.ON_TRIP;
@@ -73,7 +73,7 @@ const end = asyncHandler(async (req, res) => {
     throw new ApiError(409, 'Trip is not in progress', 'INVALID_STATUS');
   }
   const fare = calculateFare(data);
-  booking.status = BOOKING_STATUS.AWAITING_CLIENT_CONFIRMATION;
+  setBookingStatus(booking, BOOKING_STATUS.AWAITING_CLIENT_CONFIRMATION, { actor: req.user._id, note: 'Trip ended' });
   booking.endedAt = new Date();
   booking.distanceKm = data.distanceKm;
   booking.durationMinutes = data.durationMinutes;
@@ -104,7 +104,10 @@ const confirmClient = asyncHandler(async (req, res) => {
   if (booking.status !== BOOKING_STATUS.AWAITING_CLIENT_CONFIRMATION) {
     throw new ApiError(409, 'Booking is not awaiting client confirmation', 'INVALID_STATUS');
   }
-  booking.status = BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION;
+  setBookingStatus(booking, BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION, {
+    actor: req.user._id,
+    note: 'Client confirmed trip completion'
+  });
   booking.payment.status = 'CLIENT_CONFIRMED';
   booking.payment.clientConfirmedAt = new Date();
   await booking.save();
@@ -116,15 +119,10 @@ const confirmPayment = asyncHandler(async (req, res) => {
   if (booking.status !== BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION) {
     throw new ApiError(409, 'Booking is not awaiting driver cash confirmation', 'INVALID_STATUS');
   }
-  booking.status = BOOKING_STATUS.COMPLETED;
-  booking.payment.status = 'PAID';
-  booking.payment.driverConfirmedAt = new Date();
-  booking.completedAt = new Date();
-  await booking.save();
+  const completed = await finalizePaidBooking(booking, { actor: req.user._id, note: 'Driver confirmed cash payment' });
   profile.lifecycleStatus = DRIVER_STATUS.ACTIVE;
   await profile.save();
-  await createCommissionForBooking(booking);
-  res.json({ booking });
+  res.json({ booking: completed });
 });
 
 module.exports = { accept, confirmClient, confirmPayment, end, reject, start };

@@ -82,6 +82,9 @@ describe('dispatch lifecycle', () => {
 
     const paid = await request(app).post(`/api/trips/${bookingId}/payment-confirm`).set(authHeader(driverUser)).expect(200);
     expect(paid.body.booking.status).toBe(BOOKING_STATUS.COMPLETED);
+    expect(paid.body.booking.statusHistory.map((entry) => entry.status)).toEqual(
+      expect.arrayContaining([BOOKING_STATUS.PAID, BOOKING_STATUS.COMPLETED])
+    );
 
     const commission = await CommissionStatement.findOne({ booking: bookingId });
     expect(commission.commissionAmount).toBe(4.8);
@@ -111,6 +114,34 @@ describe('dispatch lifecycle', () => {
 
     const stored = await Booking.findById(bookingId);
     expect(stored.payment.status).toBe('PAID');
+    const paidIndex = stored.statusHistory.findIndex((entry) => entry.status === BOOKING_STATUS.PAID);
+    const completedIndex = stored.statusHistory.findIndex((entry) => entry.status === BOOKING_STATUS.COMPLETED);
+    expect(paidIndex).toBeGreaterThan(-1);
+    expect(completedIndex).toBeGreaterThan(paidIndex);
+  });
+
+  test('driver rejection reassigns booking to another available driver first', async () => {
+    const client = await createUser({ role: ROLES.CLIENT, email: 'client-reject@test.local', name: 'Nico Ibarra' });
+    const first = await createDriver();
+    const second = await createDriver();
+
+    const created = await request(app)
+      .post('/api/bookings')
+      .set(authHeader(client))
+      .send({ pickupAddress: '14 South Arcade', dropoffAddress: '77 Brook Terrace' })
+      .expect(201);
+
+    expect(created.body.booking.assignedDriver._id).toBe(first.profile._id.toString());
+
+    const rejected = await request(app)
+      .post(`/api/trips/${created.body.booking._id}/reject`)
+      .set(authHeader(first.user))
+      .expect(200);
+
+    expect(rejected.body.booking.status).toBe(BOOKING_STATUS.DRIVER_ASSIGNED);
+    expect(rejected.body.booking.assignedDriver.toString()).toBe(second.profile._id.toString());
+    expect((await DriverProfile.findById(first.profile._id)).lifecycleStatus).toBe(DRIVER_STATUS.ACTIVE);
+    expect((await DriverProfile.findById(second.profile._id)).lifecycleStatus).toBe(DRIVER_STATUS.ASSIGNED);
   });
 
   test('driver cannot confirm cash before client confirms completion', async () => {

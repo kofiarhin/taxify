@@ -5,6 +5,7 @@ const { ROLES } = require('../constants/roles');
 const { BOOKING_STATUS } = require('../constants/statuses');
 const ApiError = require('../utils/apiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { setBookingStatus } = require('../services/bookingLifecycleService');
 
 const createSchema = z.object({
   booking: z.string().optional(),
@@ -38,7 +39,7 @@ const createComplaint = asyncHandler(async (req, res) => {
   });
 
   if (booking && data.type === 'DISPUTE') {
-    booking.status = BOOKING_STATUS.DISPUTED;
+    setBookingStatus(booking, BOOKING_STATUS.DISPUTED, { actor: req.user._id, note: 'Dispute complaint submitted' });
     booking.disputedAt = new Date();
     await booking.save();
   }
