@@ -7,7 +7,7 @@ const ApiError = require('../utils/apiError');
 const asyncHandler = require('../utils/asyncHandler');
 const realtime = require('../realtime/socket');
 const { assignAvailableDriver, reassignBooking, retryAssignment } = require('../services/assignmentService');
-const { finalizePaidBooking, setBookingStatus } = require('../services/bookingLifecycleService');
+const { forceFinalizePaidBooking, setBookingStatus } = require('../services/bookingLifecycleService');
 
 const optionalTrimmedString = () =>
   z
@@ -153,11 +153,11 @@ const completeOverride = asyncHandler(async (req, res) => {
   const booking = await Booking.findById(req.params.bookingId);
   if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
 
-  if (![BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION, BOOKING_STATUS.PAID].includes(booking.status)) {
+  if (![BOOKING_STATUS.AWAITING_PAYMENT, BOOKING_STATUS.PAID].includes(booking.status)) {
     throw new ApiError(409, 'Booking is not ready for admin completion', 'BOOKING_NOT_COMPLETABLE');
   }
 
-  const completed = await finalizePaidBooking(booking, { actor: req.user._id, note: 'Admin completed booking' });
+  const completed = await forceFinalizePaidBooking(booking, { actor: req.user._id, note: 'Admin completed booking' });
   const hydrated = await populateBooking(Booking.findById(completed._id));
   realtime.emitBookingEvent(hydrated, 'booking:completed');
   res.json({ booking: hydrated });

@@ -90,7 +90,7 @@ describe('agent and complaint operations', () => {
       .set(authHeader(driverUser))
       .send({ distanceKm: 3, durationMinutes: 7 })
       .expect(200);
-    await request(app).post(`/api/trips/${bookingId}/client-confirm`).set(authHeader(client)).expect(200);
+    await request(app).post(`/api/trips/${bookingId}/client-arrived`).set(authHeader(client)).expect(200);
 
     const completed = await request(app)
       .post(`/api/bookings/${bookingId}/complete`)

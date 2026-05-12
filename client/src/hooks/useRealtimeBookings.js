@@ -14,6 +14,7 @@ export const BOOKING_REALTIME_EVENTS = [
   'booking:disputed',
   'trip:started',
   'trip:ended',
+  'trip:client_arrived',
   'payment:client_confirmed',
   'payment:driver_confirmed',
   'booking:completed'

@@ -1,0 +1,15 @@
+Admin:  admin@taxify.local
+Agent:  agent@taxify.local
+Driver: driver@taxify.local
+Client: client@taxify.local
+
+Password: Password123!
+
+
+
+
+Role	Email	Password
+Admin	admin@taxify.local	Password123!
+Agent	agent@taxify.local	Password123!
+Driver	driver@taxify.local	Password123!
+Client	client@taxify.local	Password123!

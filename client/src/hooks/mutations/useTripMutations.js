@@ -14,5 +14,6 @@ export const useAcceptTripMutation = () => invalidatesBookings(tripService.accep
 export const useRejectTripMutation = () => invalidatesBookings(tripService.reject);
 export const useStartTripMutation = () => invalidatesBookings(tripService.start);
 export const useEndTripMutation = () => invalidatesBookings(({ bookingId, payload }) => tripService.end(bookingId, payload));
-export const useClientConfirmMutation = () => invalidatesBookings(tripService.clientConfirm);
-export const usePaymentConfirmMutation = () => invalidatesBookings(tripService.paymentConfirm);
+export const useClientArrivedMutation = () => invalidatesBookings(tripService.clientArrived);
+export const useClientPaidMutation = () => invalidatesBookings(tripService.clientPaid);
+export const useDriverReceivedMutation = () => invalidatesBookings(tripService.driverReceived);

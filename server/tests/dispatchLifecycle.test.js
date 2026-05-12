@@ -191,11 +191,15 @@ describe('dispatch lifecycle', () => {
       .expect(200);
 
     expect(ended.body.booking.fare.total).toBe(48);
-    expect(ended.body.booking.status).toBe(BOOKING_STATUS.AWAITING_CLIENT_CONFIRMATION);
+    expect(ended.body.booking.status).toBe(BOOKING_STATUS.TRIP_AWAITING_ARRIVAL_ACK);
 
-    await request(app).post(`/api/trips/${bookingId}/client-confirm`).set(authHeader(client)).expect(200);
+    const arrived = await request(app).post(`/api/trips/${bookingId}/client-arrived`).set(authHeader(client)).expect(200);
+    expect(arrived.body.booking.status).toBe(BOOKING_STATUS.AWAITING_PAYMENT);
 
-    const paid = await request(app).post(`/api/trips/${bookingId}/payment-confirm`).set(authHeader(driverUser)).expect(200);
+    const clientPaid = await request(app).post(`/api/trips/${bookingId}/client-paid`).set(authHeader(client)).expect(200);
+    expect(clientPaid.body.booking.status).toBe(BOOKING_STATUS.AWAITING_PAYMENT);
+
+    const paid = await request(app).post(`/api/trips/${bookingId}/driver-received`).set(authHeader(driverUser)).expect(200);
     expect(paid.body.booking.status).toBe(BOOKING_STATUS.COMPLETED);
     expect(paid.body.booking.statusHistory.map((entry) => entry.status)).toEqual(
       expect.arrayContaining([BOOKING_STATUS.PAID, BOOKING_STATUS.COMPLETED])
@@ -239,6 +243,7 @@ describe('dispatch lifecycle', () => {
         'booking:accepted',
         'trip:started',
         'trip:ended',
+        'trip:client_arrived',
         'payment:client_confirmed',
         'payment:driver_confirmed',
         'booking:completed'
@@ -302,7 +307,7 @@ describe('dispatch lifecycle', () => {
     expect(emitSpy.mock.calls.map((call) => call[1])).toEqual(['booking:created', 'booking:reassigned']);
   });
 
-  test('driver cannot confirm cash before client confirms completion', async () => {
+  test('driver cannot confirm cash before client acknowledges arrival', async () => {
     const client = await createUser({ role: ROLES.CLIENT, email: 'client-order@test.local', name: 'Nico Ibarra' });
     const { user: driverUser } = await createDriver();
 
@@ -316,6 +321,53 @@ describe('dispatch lifecycle', () => {
     await request(app).post(`/api/trips/${bookingId}/accept`).set(authHeader(driverUser)).expect(200);
     await request(app).post(`/api/trips/${bookingId}/start`).set(authHeader(driverUser)).expect(200);
     await request(app).post(`/api/trips/${bookingId}/end`).set(authHeader(driverUser)).send({ distanceKm: 2, durationMinutes: 5 }).expect(200);
-    await request(app).post(`/api/trips/${bookingId}/payment-confirm`).set(authHeader(driverUser)).expect(409);
+    await request(app).post(`/api/trips/${bookingId}/driver-received`).set(authHeader(driverUser)).expect(409);
+  });
+
+  test('cash payment only finalizes after both client and driver confirm', async () => {
+    const client = await createUser({ role: ROLES.CLIENT, email: 'client-dual@test.local', name: 'Nico Ibarra' });
+    const { user: driverUser } = await createDriver();
+
+    const created = await request(app)
+      .post('/api/bookings')
+      .set(authHeader(client))
+      .send({ pickupAddress: 'Dock Lane', dropoffAddress: 'Cedar Court' })
+      .expect(201);
+
+    const bookingId = created.body.booking._id;
+    await request(app).post(`/api/trips/${bookingId}/accept`).set(authHeader(driverUser)).expect(200);
+    await request(app).post(`/api/trips/${bookingId}/start`).set(authHeader(driverUser)).expect(200);
+    await request(app).post(`/api/trips/${bookingId}/end`).set(authHeader(driverUser)).send({ distanceKm: 2, durationMinutes: 5 }).expect(200);
+    await request(app).post(`/api/trips/${bookingId}/client-arrived`).set(authHeader(client)).expect(200);
+
+    const onlyDriver = await request(app).post(`/api/trips/${bookingId}/driver-received`).set(authHeader(driverUser)).expect(200);
+    expect(onlyDriver.body.booking.status).toBe(BOOKING_STATUS.AWAITING_PAYMENT);
+    expect(onlyDriver.body.booking.payment.driverConfirmedAt).toBeTruthy();
+    expect(onlyDriver.body.booking.payment.clientConfirmedAt).toBeFalsy();
+
+    const final = await request(app).post(`/api/trips/${bookingId}/client-paid`).set(authHeader(client)).expect(200);
+    expect(final.body.booking.status).toBe(BOOKING_STATUS.COMPLETED);
+    expect(final.body.booking.payment.status).toBe('PAID');
+    expect(await CommissionStatement.findOne({ booking: bookingId })).toBeTruthy();
+  });
+
+  test('repeat driver-received call is idempotent', async () => {
+    const client = await createUser({ role: ROLES.CLIENT, email: 'client-idem@test.local', name: 'Nico Ibarra' });
+    const { user: driverUser } = await createDriver();
+
+    const created = await request(app)
+      .post('/api/bookings')
+      .set(authHeader(client))
+      .send({ pickupAddress: 'Dock Lane', dropoffAddress: 'Cedar Court' })
+      .expect(201);
+
+    const bookingId = created.body.booking._id;
+    await request(app).post(`/api/trips/${bookingId}/accept`).set(authHeader(driverUser)).expect(200);
+    await request(app).post(`/api/trips/${bookingId}/start`).set(authHeader(driverUser)).expect(200);
+    await request(app).post(`/api/trips/${bookingId}/end`).set(authHeader(driverUser)).send({ distanceKm: 2, durationMinutes: 5 }).expect(200);
+    await request(app).post(`/api/trips/${bookingId}/client-arrived`).set(authHeader(client)).expect(200);
+    await request(app).post(`/api/trips/${bookingId}/driver-received`).set(authHeader(driverUser)).expect(200);
+    const repeat = await request(app).post(`/api/trips/${bookingId}/driver-received`).set(authHeader(driverUser)).expect(200);
+    expect(repeat.body.booking.status).toBe(BOOKING_STATUS.AWAITING_PAYMENT);
   });
 });

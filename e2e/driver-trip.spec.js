@@ -25,14 +25,18 @@ test.describe('driver trip and cash confirmation happy path', () => {
     await page.getByPlaceholder('Distance km').fill('7');
     await page.getByPlaceholder('Duration minutes').fill('12');
     await page.getByRole('button', { name: 'End trip' }).click();
-    await expect(page.getByText(/AWAITING CLIENT CONFIRMATION/i)).toBeVisible();
+    await expect(page.getByText(/TRIP AWAITING ARRIVAL ACK/i)).toBeVisible();
     await expect(page.getByText('$43')).toBeVisible();
 
-    await postAsRole(request, 'client', `/trips/${state.bookingIds.driver}/client-confirm`);
+    await postAsRole(request, 'client', `/trips/${state.bookingIds.driver}/client-arrived`);
     await page.reload();
 
-    await expect(page.getByText(/AWAITING DRIVER PAYMENT CONFIRMATION/i)).toBeVisible();
+    await expect(page.getByText(/AWAITING PAYMENT/i)).toBeVisible();
     await page.getByRole('button', { name: 'Confirm cash received' }).click();
+    await expect(page.getByText(/Waiting for passenger to confirm they paid/i)).toBeVisible();
+
+    await postAsRole(request, 'client', `/trips/${state.bookingIds.driver}/client-paid`);
+    await page.reload();
     await expect(page.getByText(/No active booking assigned/i)).toBeVisible();
   });
 });

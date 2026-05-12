@@ -27,9 +27,13 @@ const bookingSchema = new mongoose.Schema(
     },
     payment: {
       method: { type: String, enum: ['CASH'], default: 'CASH' },
-      status: { type: String, enum: ['UNPAID', 'CLIENT_CONFIRMED', 'PAID'], default: 'UNPAID' },
+      status: { type: String, enum: ['UNPAID', 'PAID'], default: 'UNPAID' },
       clientConfirmedAt: Date,
       driverConfirmedAt: Date
+    },
+    arrival: {
+      driverMarkedAt: Date,
+      clientMarkedAt: Date
     },
     statusHistory: [
       {
