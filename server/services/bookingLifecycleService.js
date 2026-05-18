@@ -15,8 +15,7 @@ const setBookingStatus = (booking, status, { actor, note } = {}) => {
   return booking;
 };
 
-const bothPartiesPaid = (booking) =>
-  Boolean(booking.payment?.clientConfirmedAt && booking.payment?.driverConfirmedAt);
+const driverPaymentConfirmed = (booking) => Boolean(booking.payment?.driverConfirmedAt);
 
 const assertFinalizable = (booking) => {
   if (!booking.assignedDriver) {
@@ -28,23 +27,25 @@ const assertFinalizable = (booking) => {
 };
 
 const finalizeNow = async (booking, { actor, note }) => {
+  if (booking.status === BOOKING_STATUS.COMPLETED) return booking;
+
   const now = new Date();
   booking.payment.status = 'PAID';
   booking.completedAt = booking.completedAt || now;
   setBookingStatus(booking, BOOKING_STATUS.PAID, { actor, note: 'Cash payment recorded' });
-  setBookingStatus(booking, BOOKING_STATUS.COMPLETED, { actor, note });
 
-  // Write commission first; it is upsert-by-bookingId so retries are safe.
-  // Failure here leaves the booking in AWAITING_PAYMENT for a clean retry,
-  // rather than a COMPLETED booking with no commission row.
+  // Write commission before final completion; it is upsert-by-bookingId so
+  // retries are safe and cannot duplicate commission statements.
   await createCommissionForBooking(booking);
+
+  setBookingStatus(booking, BOOKING_STATUS.COMPLETED, { actor, note });
   await booking.save();
   await DriverProfile.findByIdAndUpdate(booking.assignedDriver, { lifecycleStatus: DRIVER_STATUS.ACTIVE });
   return booking;
 };
 
 const tryFinalizePaidBooking = async (booking, { actor, note = 'Booking completed' } = {}) => {
-  if (!bothPartiesPaid(booking)) return booking;
+  if (!driverPaymentConfirmed(booking)) return booking;
   assertFinalizable(booking);
   return finalizeNow(booking, { actor, note });
 };
@@ -52,13 +53,12 @@ const tryFinalizePaidBooking = async (booking, { actor, note = 'Booking complete
 const forceFinalizePaidBooking = async (booking, { actor, note = 'Admin completed booking' } = {}) => {
   assertFinalizable(booking);
   const now = new Date();
-  if (!booking.payment.clientConfirmedAt) booking.payment.clientConfirmedAt = now;
   if (!booking.payment.driverConfirmedAt) booking.payment.driverConfirmedAt = now;
   return finalizeNow(booking, { actor, note });
 };
 
 module.exports = {
-  bothPartiesPaid,
+  driverPaymentConfirmed,
   forceFinalizePaidBooking,
   setBookingStatus,
   tryFinalizePaidBooking

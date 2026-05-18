@@ -4,11 +4,11 @@ This file is the live resume state for the active workflow. Keep it current afte
 
 ## Current Request
 
-Finish and harden the Socket.IO realtime dispatch milestone with stable event contracts, reduced duplicate lifecycle emissions, consistent booking payload handling, backend lifecycle tests, frontend realtime tests, and cache update improvements.
+Implement the high-priority Taxify booking/trip/payment lifecycle fix using the required statuses and flow, update backend/frontend/admin behavior, add lifecycle tests, and verify backend tests plus client build.
 
 ## Request ID
 
-`2026-05-14-harden-realtime-dispatch-socket-io`
+`2026-05-14-high-priority-lifecycle-fix`
 
 ## Current Phase
 
@@ -20,27 +20,27 @@ Finish and harden the Socket.IO realtime dispatch milestone with stable event co
 
 ## Current Spec File
 
-`_spec/2026-05-14-harden-realtime-dispatch-socket-io.md`
+`_spec/2026-05-14-high-priority-lifecycle-fix.md`
 
 ## Current Task Plan File
 
-`_task/2026-05-14-harden-realtime-dispatch-socket-io.md`
+`_task/2026-05-14-high-priority-lifecycle-fix.md`
 
 ## Current Review File
 
-`_review/2026-05-14-harden-realtime-dispatch-socket-io.md`
+`_review/2026-05-14-high-priority-lifecycle-fix.md`
 
 ## Current Release Notes File
 
-`_release/2026-05-14-harden-realtime-dispatch-socket-io.md`
+`_release/2026-05-14-high-priority-lifecycle-fix.md`
 
 ## Current Summary File
 
-`_summary/2026-05-14-harden-realtime-dispatch-socket-io.md`
+`_summary/2026-05-14-high-priority-lifecycle-fix.md`
 
 ## Last Completed Task
 
-`TASK-004: Run final verification and close workflow`
+`TASK-003: Update lifecycle tests and close workflow`
 
 ## Current Task
 
@@ -52,11 +52,11 @@ Finish and harden the Socket.IO realtime dispatch milestone with stable event co
 
 ## Dirty Worktree Status
 
-`Final dirty files are intentional realtime hardening source/test/docs files and workflow artifacts.`
+`Final dirty files are intentional lifecycle source/test/E2E updates and workflow artifacts.`
 
 ## Acceptance Status
 
-`complete: TASK-001 through TASK-004 acceptance criteria checked`
+`complete: TASK-001 through TASK-003 acceptance criteria checked`
 
 ## Blockers
 
@@ -64,7 +64,7 @@ Finish and harden the Socket.IO realtime dispatch milestone with stable event co
 
 ## Verification Status
 
-`passed: npm test; npm run test --prefix client; git diff --stat; targeted git diff; git status --short`
+`passed: targeted backend lifecycle/admin tests; npm run test --prefix client; npm run build --prefix client; npm test; old-status rg check; git diff --stat; targeted git diff; git status --short`
 
 ## Workflow Health Status
 
@@ -72,13 +72,11 @@ Finish and harden the Socket.IO realtime dispatch milestone with stable event co
 
 ## Suggested Next Prompt
 
-`Review and commit the realtime dispatch hardening changes`
+`Review and commit the lifecycle status fix`
 
 ## Notes For Continuation
 
-- `server/realtime/bookingPayload.js` owns realtime booking serialization/population and strips internal auth fields.
-- Realtime payloads follow `{ type, bookingId, status, booking?, timestamp }` with string booking ids and ISO timestamps.
-- Booking creation emits one final `booking:created` after assignment resolves.
-- Reassignment emits one final `booking:reassigned`; driver rejection emits `booking:rejected` then the final assigned/queued outcome.
-- `useRealtimeBookings` now replaces or inserts payload bookings in cached booking lists, avoids duplicates, sorts newest-first when `createdAt` exists, and invalidates booking queries.
-- Full backend and frontend tests passed for this workflow.
+- Required explicit transition is `TRIP_IN_PROGRESS -> TRIP_ENDED -> AWAITING_DRIVER_PAYMENT_CONFIRMATION -> PAID -> COMPLETED`.
+- Old `TRIP_AWAITING_ARRIVAL_ACK` and `AWAITING_PAYMENT` status strings have been removed from backend and frontend source/test/E2E files.
+- Keep existing trip routes stable where practical; aliases are acceptable only when needed.
+- Apply `design-taste-frontend` pre-flight before final frontend output.

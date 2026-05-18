@@ -57,6 +57,45 @@ Do not stop after `TASK-001` unless execution mode is explicitly `single-task` o
 
 After appending each task entry, update `_handoff/current.md` with the latest current state.
 
+### 2026-05-14 12:30 - LIFECYCLE-FIX TASK-001
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `WORK_REQUEST.md`, `_spec/2026-05-14-high-priority-lifecycle-fix.md`, `_task/2026-05-14-high-priority-lifecycle-fix.md`, `_handoff/current.md`, `server/constants/statuses.js`, `server/controllers/tripController.js`, `server/routes/tripRoutes.js`, `server/services/bookingLifecycleService.js`, `server/controllers/bookingController.js`, `server/tests/dispatchLifecycle.test.js`, `server/tests/operations.test.js`
+- Dirty worktree protection: Initial `git status --short` was clean before syncing this request. TASK-001 edits were scoped to backend lifecycle source/tests and workflow artifacts.
+- Acceptance result: `[x]` backend constants use required lifecycle statuses; `[x]` old trip arrival/payment statuses removed from backend lifecycle logic; `[x]` end trip returns `TRIP_ENDED`; `[x]` client confirmation returns `AWAITING_DRIVER_PAYMENT_CONFIRMATION`; `[x]` driver cash confirmation records `PAID` before `COMPLETED`; `[x]` commission upsert occurs before final completion; `[x]` driver returns `ACTIVE`; `[x]` guarded invalid transitions return 409.
+- Verification result: `npm test -- --runTestsByPath server/tests/dispatchLifecycle.test.js server/tests/operations.test.js` passed 2 suites/14 tests.
+- Failure recovery notes: none
+- Review result: Reviewed; existing route names remain stable, with `/api/trips/:bookingId/client-confirmed` added as a semantic alias and old client routes mapped to the new client completion confirmation.
+- Blockers: none
+- Next step: TASK-002
+
+### 2026-05-14 13:10 - LIFECYCLE-FIX TASK-002
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `client/src/constants/statuses.js`, `client/src/hooks/useRealtimeBookings.js`, `client/src/services/tripService.js`, `client/src/hooks/mutations/useTripMutations.js`, `client/src/pages/client/ClientCurrentBookingPage.jsx`, `client/src/pages/driver/DriverWorkspacePage.jsx`, `client/src/pages/admin/AdminBookingsPage.jsx`, `client/test/AdminBookingsPage.test.jsx`, `e2e/helpers/e2eSeed.js`, `e2e/driver-trip.spec.js`, `_task/2026-05-14-high-priority-lifecycle-fix.md`, `_progress/progress.md`, `_handoff/current.md`
+- Dirty worktree protection: TASK-002 edits were scoped to lifecycle UI, frontend tests, E2E fixtures/spec expectations, and workflow artifacts. No unrelated user changes appeared.
+- Acceptance result: `[x]` frontend constants and badge tones use new statuses; `[x]` client fare/action UI follows `TRIP_ENDED`; `[x]` driver cash confirmation appears only on `AWAITING_DRIVER_PAYMENT_CONFIRMATION`; `[x]` old arrival acknowledgement UI removed; `[x]` admin completion status filter updated; `[x]` old status strings no longer appear in frontend source/tests/E2E files.
+- Verification result: `npm run test --prefix client` passed 3 suites/9 tests. `npm run build --prefix client` passed. Vitest printed React Router v7 future-flag warnings only.
+- Failure recovery notes: none
+- Review result: Reviewed with `design-taste-frontend` pre-flight: Redux/global state unchanged, responsive layouts preserved, no `h-screen` added, no new effects/animations or CPU-heavy motion, existing loading/empty/error states preserved, and no broad visual redesign introduced.
+- Blockers: none
+- Next step: TASK-003
+
+### 2026-05-14 13:35 - LIFECYCLE-FIX TASK-003
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `_task/2026-05-14-high-priority-lifecycle-fix.md`, `_progress/progress.md`, `_handoff/current.md`, `_review/2026-05-14-high-priority-lifecycle-fix.md`, `_release/2026-05-14-high-priority-lifecycle-fix.md`, `_summary/2026-05-14-high-priority-lifecycle-fix.md`
+- Dirty worktree protection: Final dirty files are intentional lifecycle source/test/E2E updates and workflow artifacts for this request.
+- Acceptance result: `[x]` full lifecycle backend test covers required flow; `[x]` admin override test uses new statuses; `[x]` backend tests pass; `[x]` client build passes; `[x]` final diff audit completed; `[x]` review, release notes, summary, and handoff completed.
+- Verification result: `npm test` passed 4 suites/22 tests. `npm run build --prefix client` passed. `rg "TRIP_AWAITING_ARRIVAL_ACK|AWAITING_PAYMENT" server client\src client\test e2e -g "*.js" -g "*.jsx"` returned no matches. `git diff --stat`, targeted `git diff`, and `git status --short` completed.
+- Failure recovery notes: none
+- Review result: Reviewed; workflow health Passed.
+- Blockers: none
+- Next step: Final response.
+
 ### 2026-05-13 00:00 - INTAKE
 
 - Status: Blocked

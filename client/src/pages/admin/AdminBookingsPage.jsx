@@ -7,7 +7,7 @@ import { apiErrorMessage } from '../../lib/api';
 
 const preTripStatuses = ['PENDING_ASSIGNMENT', 'QUEUED', 'DRIVER_ASSIGNED', 'DRIVER_ACCEPTED'];
 const retryStatuses = ['PENDING_ASSIGNMENT', 'QUEUED'];
-const completeStatuses = ['AWAITING_PAYMENT', 'PAID'];
+const completeStatuses = ['AWAITING_DRIVER_PAYMENT_CONFIRMATION', 'PAID'];
 
 export function AdminBookingsPage() {
   const { data, isLoading, isError, error } = useBookingsQuery();

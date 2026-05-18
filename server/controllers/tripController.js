@@ -78,16 +78,16 @@ const start = asyncHandler(async (req, res) => {
   res.json({ booking });
 });
 
-// Driver-side arrival mark: records distance, computes fare, sets driver arrival.
-// Idempotent: returns current state if driver already marked.
+// Driver ends the metered trip: records distance, computes fare, and waits for
+// client completion confirmation.
 const end = asyncHandler(async (req, res) => {
   const data = endTripSchema.parse(req.body);
   const { booking, profile } = await getAssignedDriver(req.user._id, req.params.bookingId);
 
-  if (booking.arrival?.driverMarkedAt) {
+  if (booking.status === BOOKING_STATUS.TRIP_ENDED && booking.endedAt) {
     return res.json({ booking });
   }
-  if (![BOOKING_STATUS.TRIP_IN_PROGRESS, BOOKING_STATUS.TRIP_AWAITING_ARRIVAL_ACK].includes(booking.status)) {
+  if (booking.status !== BOOKING_STATUS.TRIP_IN_PROGRESS) {
     throw new ApiError(409, 'Trip is not in progress', 'INVALID_STATUS');
   }
 
@@ -100,10 +100,7 @@ const end = asyncHandler(async (req, res) => {
   booking.durationMinutes = data.durationMinutes;
   booking.fare = fare;
 
-  const nextStatus = booking.arrival.clientMarkedAt
-    ? BOOKING_STATUS.AWAITING_PAYMENT
-    : BOOKING_STATUS.TRIP_AWAITING_ARRIVAL_ACK;
-  setBookingStatus(booking, nextStatus, { actor: req.user._id, note: 'Driver marked trip ended' });
+  setBookingStatus(booking, BOOKING_STATUS.TRIP_ENDED, { actor: req.user._id, note: 'Driver ended trip' });
 
   await booking.save();
   await Trip.findOneAndUpdate(
@@ -123,26 +120,26 @@ const end = asyncHandler(async (req, res) => {
   res.json({ booking });
 });
 
-// Client-side arrival mark. Idempotent.
-const clientArrived = asyncHandler(async (req, res) => {
+// Client confirms the completed trip after fare calculation. Kept behind the
+// existing client routes for REST compatibility.
+const clientConfirmCompletion = asyncHandler(async (req, res) => {
   const booking = await getClientBooking(req.user, req.params.bookingId);
-  if (booking.arrival?.clientMarkedAt) {
+  if (booking.status === BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION && booking.arrival?.clientMarkedAt) {
     return res.json({ booking });
   }
-  if (![BOOKING_STATUS.TRIP_IN_PROGRESS, BOOKING_STATUS.TRIP_AWAITING_ARRIVAL_ACK].includes(booking.status)) {
-    throw new ApiError(409, 'Trip is not awaiting arrival acknowledgement', 'INVALID_STATUS');
+  if (booking.status !== BOOKING_STATUS.TRIP_ENDED) {
+    throw new ApiError(409, 'Trip is not awaiting client confirmation', 'INVALID_STATUS');
   }
 
   booking.arrival = booking.arrival || {};
   booking.arrival.clientMarkedAt = new Date();
-
-  const nextStatus = booking.arrival.driverMarkedAt
-    ? BOOKING_STATUS.AWAITING_PAYMENT
-    : BOOKING_STATUS.TRIP_AWAITING_ARRIVAL_ACK;
-  setBookingStatus(booking, nextStatus, { actor: req.user._id, note: 'Client confirmed trip ended' });
+  setBookingStatus(booking, BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION, {
+    actor: req.user._id,
+    note: 'Client confirmed trip completion'
+  });
 
   await booking.save();
-  await realtime.emitPopulatedBookingEvent(booking, 'trip:client_arrived');
+  await realtime.emitPopulatedBookingEvent(booking, 'trip:client_confirmed');
   res.json({ booking });
 });
 
@@ -166,33 +163,18 @@ const attemptFinalize = async (booking, { actor, profile }) => {
   return finalized;
 };
 
-// Client confirms cash paid. Idempotent. Re-attempts finalize on repeat calls so
-// a transient failure (e.g., commission write) does not strand the booking.
-const clientPaid = asyncHandler(async (req, res) => {
-  const booking = await getClientBooking(req.user, req.params.bookingId);
-  const alreadyConfirmed = Boolean(booking.payment?.clientConfirmedAt);
-
-  if (!alreadyConfirmed) {
-    if (booking.status !== BOOKING_STATUS.AWAITING_PAYMENT) {
-      throw new ApiError(409, 'Booking is not awaiting payment', 'INVALID_STATUS');
-    }
-    booking.payment.clientConfirmedAt = new Date();
-    await booking.save();
-    await realtime.emitPopulatedBookingEvent(booking, 'payment:client_confirmed');
-  }
-
-  const finalized = await attemptFinalize(booking, { actor: req.user._id });
-  res.json({ booking: finalized });
-});
-
-// Driver confirms cash received. Idempotent. Re-attempts finalize on repeat calls.
+// Driver confirms cash received. This is the payment confirmation that finalizes
+// the lifecycle after the client has confirmed trip completion.
 const driverReceived = asyncHandler(async (req, res) => {
   const { booking, profile } = await getAssignedDriver(req.user._id, req.params.bookingId);
   const alreadyConfirmed = Boolean(booking.payment?.driverConfirmedAt);
 
+  if (booking.status === BOOKING_STATUS.COMPLETED && alreadyConfirmed) {
+    return res.json({ booking });
+  }
   if (!alreadyConfirmed) {
-    if (booking.status !== BOOKING_STATUS.AWAITING_PAYMENT) {
-      throw new ApiError(409, 'Booking is not awaiting payment', 'INVALID_STATUS');
+    if (booking.status !== BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION) {
+      throw new ApiError(409, 'Booking is not awaiting driver payment confirmation', 'INVALID_STATUS');
     }
     booking.payment.driverConfirmedAt = new Date();
     await booking.save();
@@ -203,4 +185,13 @@ const driverReceived = asyncHandler(async (req, res) => {
   res.json({ booking: finalized });
 });
 
-module.exports = { accept, clientArrived, clientPaid, driverReceived, end, reject, start };
+module.exports = {
+  accept,
+  clientArrived: clientConfirmCompletion,
+  clientPaid: clientConfirmCompletion,
+  clientConfirmCompletion,
+  driverReceived,
+  end,
+  reject,
+  start
+};

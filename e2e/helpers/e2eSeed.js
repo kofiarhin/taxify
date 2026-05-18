@@ -126,7 +126,7 @@ const seedE2eData = async () => {
     passengerPhone: createdUsers.client.phone,
     pickupAddress: 'E2E Admin Complete Pickup',
     dropoffAddress: 'E2E Admin Complete Dropoff',
-    status: BOOKING_STATUS.AWAITING_PAYMENT,
+    status: BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION,
     assignedDriver: adminCompleteDriver._id,
     distanceKm: 8,
     durationMinutes: 14,
@@ -135,7 +135,7 @@ const seedE2eData = async () => {
     arrival: { driverMarkedAt: new Date(), clientMarkedAt: new Date() },
     endedAt: new Date(),
     statusHistory: makeHistory(
-      BOOKING_STATUS.AWAITING_PAYMENT,
+      BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION,
       createdUsers.client._id,
       'E2E admin complete seed'
     )

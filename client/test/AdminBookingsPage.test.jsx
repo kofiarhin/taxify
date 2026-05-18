@@ -38,7 +38,7 @@ describe('AdminBookingsPage', () => {
             pickupAddress: '9 Elm Yard',
             dropoffAddress: '44 Archive Road',
             source: 'AGENT',
-            status: 'AWAITING_PAYMENT',
+            status: 'AWAITING_DRIVER_PAYMENT_CONFIRMATION',
             assignedDriver: { user: { name: 'Mateo Rivas' } },
             fare: { total: 36.5 }
           }

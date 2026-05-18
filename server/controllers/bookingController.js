@@ -153,7 +153,7 @@ const completeOverride = asyncHandler(async (req, res) => {
   const booking = await Booking.findById(req.params.bookingId);
   if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
 
-  if (![BOOKING_STATUS.AWAITING_PAYMENT, BOOKING_STATUS.PAID].includes(booking.status)) {
+  if (![BOOKING_STATUS.AWAITING_DRIVER_PAYMENT_CONFIRMATION, BOOKING_STATUS.PAID].includes(booking.status)) {
     throw new ApiError(409, 'Booking is not ready for admin completion', 'BOOKING_NOT_COMPLETABLE');
   }
 
