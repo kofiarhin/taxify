@@ -84,6 +84,60 @@ describe('dispatch lifecycle', () => {
     expect(emitSpy.mock.calls.map((call) => call[1])).toEqual(['booking:created']);
   });
 
+  test('queued booking assigns when an approved driver becomes active', async () => {
+    const client = await createUser({ role: ROLES.CLIENT, email: 'client-queue-active@test.local', name: 'Nico Ibarra' });
+    const { user: driverUser, profile } = await createDriver({ active: false });
+    const emitSpy = jest.spyOn(realtime, 'emitBookingEvent');
+
+    const created = await request(app)
+      .post('/api/bookings')
+      .set(authHeader(client))
+      .send({ pickupAddress: '11 River Street', dropoffAddress: '82 Mason Avenue' })
+      .expect(201);
+
+    expect(created.body.booking.status).toBe(BOOKING_STATUS.QUEUED);
+
+    const available = await request(app)
+      .patch('/api/drivers/me/availability')
+      .set(authHeader(driverUser))
+      .send({ lifecycleStatus: DRIVER_STATUS.ACTIVE })
+      .expect(200);
+
+    expect(available.body.profile.lifecycleStatus).toBe(DRIVER_STATUS.ASSIGNED);
+
+    const assigned = await Booking.findById(created.body.booking._id);
+    expect(assigned.status).toBe(BOOKING_STATUS.DRIVER_ASSIGNED);
+    expect(assigned.assignedDriver.toString()).toBe(profile._id.toString());
+    expect((await DriverProfile.findById(profile._id)).lifecycleStatus).toBe(DRIVER_STATUS.ASSIGNED);
+    expect(emitSpy.mock.calls.map((call) => call[1])).toEqual(['booking:created', 'booking:assigned']);
+  });
+
+  test('queued booking assigns when admin approves a driver into active service', async () => {
+    const admin = await createUser({ role: ROLES.ADMIN, email: 'admin-approve-queue@test.local', name: 'Mara Ellison' });
+    const client = await createUser({ role: ROLES.CLIENT, email: 'client-queue-admin@test.local', name: 'Nico Ibarra' });
+    const { profile } = await createDriver({ approved: false, active: false });
+
+    const created = await request(app)
+      .post('/api/bookings')
+      .set(authHeader(client))
+      .send({ pickupAddress: '14 South Arcade', dropoffAddress: '77 Brook Terrace' })
+      .expect(201);
+
+    expect(created.body.booking.status).toBe(BOOKING_STATUS.QUEUED);
+
+    const approved = await request(app)
+      .patch(`/api/drivers/${profile._id}/status`)
+      .set(authHeader(admin))
+      .send({ approvalStatus: 'APPROVED' })
+      .expect(200);
+
+    expect(approved.body.profile.lifecycleStatus).toBe(DRIVER_STATUS.ASSIGNED);
+
+    const assigned = await Booking.findById(created.body.booking._id);
+    expect(assigned.status).toBe(BOOKING_STATUS.DRIVER_ASSIGNED);
+    expect(assigned.assignedDriver.toString()).toBe(profile._id.toString());
+  });
+
   test('booking creation emits one final populated payload to admin, client, and assigned driver rooms', async () => {
     const admin = await createUser({ role: ROLES.ADMIN, email: 'admin-realtime@test.local', name: 'Mara Ellison' });
     const client = await createUser({ role: ROLES.CLIENT, email: 'client-realtime@test.local', name: 'Nico Ibarra' });
@@ -276,6 +330,32 @@ describe('dispatch lifecycle', () => {
       'booking:rejected',
       'booking:assigned'
     ]);
+  });
+
+  test('driver rejection returns booking to queue when no replacement driver is available', async () => {
+    const client = await createUser({ role: ROLES.CLIENT, email: 'client-reject-queue@test.local', name: 'Nico Ibarra' });
+    const { user: driverUser, profile } = await createDriver();
+
+    const created = await request(app)
+      .post('/api/bookings')
+      .set(authHeader(client))
+      .send({ pickupAddress: '14 South Arcade', dropoffAddress: '77 Brook Terrace' })
+      .expect(201);
+
+    expect(created.body.booking.assignedDriver._id).toBe(profile._id.toString());
+
+    const rejected = await request(app)
+      .post(`/api/trips/${created.body.booking._id}/reject`)
+      .set(authHeader(driverUser))
+      .expect(200);
+
+    expect(rejected.body.booking.status).toBe(BOOKING_STATUS.QUEUED);
+    expect(rejected.body.booking.assignedDriver).toBeFalsy();
+    expect((await DriverProfile.findById(profile._id)).lifecycleStatus).toBe(DRIVER_STATUS.ACTIVE);
+
+    const queued = await Booking.findById(created.body.booking._id);
+    expect(queued.status).toBe(BOOKING_STATUS.QUEUED);
+    expect(queued.assignedDriver).toBeFalsy();
   });
 
   test('admin reassignment emits one final reassigned event', async () => {

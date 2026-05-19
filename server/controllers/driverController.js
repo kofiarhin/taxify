@@ -5,6 +5,7 @@ const { ROLES } = require('../constants/roles');
 const { DRIVER_APPROVAL_STATUS, DRIVER_STATUS } = require('../constants/statuses');
 const ApiError = require('../utils/apiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { assignQueuedBookingToDriver } = require('../services/assignmentService');
 
 const onboardingSchema = z.object({
   licenseNumber: z.string().min(2).optional(),
@@ -60,8 +61,15 @@ const updateAvailability = asyncHandler(async (req, res) => {
     throw new ApiError(409, 'Driver status is locked by an active booking', 'DRIVER_BUSY');
   }
 
+  const wasAvailable = profile.lifecycleStatus === DRIVER_STATUS.ACTIVE;
   profile.lifecycleStatus = data.lifecycleStatus;
   await profile.save();
+  if (!wasAvailable && profile.lifecycleStatus === DRIVER_STATUS.ACTIVE) {
+    await assignQueuedBookingToDriver(profile, {
+      actor: req.user._id,
+      note: 'Driver became available'
+    });
+  }
   res.json({ profile });
 });
 
@@ -69,6 +77,8 @@ const updateDriverStatus = asyncHandler(async (req, res) => {
   const data = adminStatusSchema.parse(req.body);
   const profile = await DriverProfile.findById(req.params.driverId).populate('user', 'name email phone role');
   if (!profile) throw new ApiError(404, 'Driver profile not found', 'DRIVER_NOT_FOUND');
+  const wasAvailable =
+    profile.approvalStatus === DRIVER_APPROVAL_STATUS.APPROVED && profile.lifecycleStatus === DRIVER_STATUS.ACTIVE;
 
   if (data.approvalStatus) {
     profile.approvalStatus = data.approvalStatus;
@@ -86,6 +96,14 @@ const updateDriverStatus = asyncHandler(async (req, res) => {
   }
 
   await profile.save();
+  const isAvailable =
+    profile.approvalStatus === DRIVER_APPROVAL_STATUS.APPROVED && profile.lifecycleStatus === DRIVER_STATUS.ACTIVE;
+  if (!wasAvailable && isAvailable) {
+    await assignQueuedBookingToDriver(profile, {
+      actor: req.user._id,
+      note: 'Driver made available by admin'
+    });
+  }
   res.json({ profile });
 });
 

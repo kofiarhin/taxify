@@ -58,6 +58,46 @@ const assignAvailableDriver = async (booking, options = {}) => {
   return booking;
 };
 
+const assignQueuedBookingToDriver = async (driver, options = {}) => {
+  if (
+    !driver ||
+    driver.approvalStatus !== DRIVER_APPROVAL_STATUS.APPROVED ||
+    driver.lifecycleStatus !== DRIVER_STATUS.ACTIVE
+  ) {
+    return null;
+  }
+
+  const booking = await Booking.findOne({
+    status: { $in: [BOOKING_STATUS.PENDING_ASSIGNMENT, BOOKING_STATUS.QUEUED] },
+    $or: [{ assignedDriver: { $exists: false } }, { assignedDriver: null }]
+  }).sort({ createdAt: 1, updatedAt: 1 });
+
+  if (!booking) return null;
+
+  setBookingStatus(booking, BOOKING_STATUS.DRIVER_ASSIGNED, {
+    actor: options.actor,
+    note: options.note || 'Queued booking assigned to available driver'
+  });
+  booking.assignedDriver = driver._id;
+  await booking.save();
+
+  driver.lifecycleStatus = DRIVER_STATUS.ASSIGNED;
+  await driver.save();
+
+  await recordAssignmentAttempt({
+    booking: booking._id,
+    driver: driver._id,
+    status: 'ASSIGNED',
+    note: options.note || 'Queued booking assigned to available driver'
+  });
+
+  if (!options.suppressRealtime) {
+    await realtime.emitPopulatedBookingEvent(booking, 'booking:assigned');
+  }
+
+  return booking;
+};
+
 const requeueBooking = async (booking, driver, note = 'Driver rejected booking') => {
   const rejectedDriverId = driver?._id;
   if (driver) {
@@ -107,4 +147,4 @@ const reassignBooking = async (booking, { actor } = {}) => {
   return updated;
 };
 
-module.exports = { assignAvailableDriver, reassignBooking, requeueBooking, retryAssignment };
+module.exports = { assignAvailableDriver, assignQueuedBookingToDriver, reassignBooking, requeueBooking, retryAssignment };

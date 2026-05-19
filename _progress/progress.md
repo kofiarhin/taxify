@@ -57,6 +57,58 @@ Do not stop after `TASK-001` unless execution mode is explicitly `single-task` o
 
 After appending each task entry, update `_handoff/current.md` with the latest current state.
 
+### 2026-05-19 01:35 - RESET-SEED TASK-001
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `WORK_REQUEST.md`, `_spec/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`, `_task/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`, `_handoff/current.md`, `_progress/progress.md`
+- Dirty worktree protection: Initial status included prior dirty ride-assignment source/test files and workflow artifacts. This task edited only reset/seed workflow artifacts and did not touch prior dirty server source/test files.
+- Acceptance result: `[x]` root `.env` database data reset; `[x]` existing seed command completed with `SEED_PASSWORD=password`; `[x]` admin, client, and driver users exist; `[x]` seeded user password verification succeeds for `password`.
+- Verification result: Initial `dropDatabase` reset command failed due MongoDB permission; collection-level reset command passed, clearing 33 documents from non-system collections in `taxify_dev`. `$env:SEED_PASSWORD='password'; npm run seed:users` passed. Verification query confirmed admin/client/driver users, password checks, approved active driver profile, and 4 total seeded users.
+- Failure recovery notes: Failing command was the `dropDatabase` Node script. Error: `user is not allowed to do action [dropDatabase] on [taxify_dev.]`. Classified as in-scope operational permission limitation. Targeted recovery used the same root `.env` connection to clear all non-system collections with `deleteMany({})`, then seeded and verified successfully.
+- Review result: Reviewed; reset was scoped to the configured development database and no password hashes or `.env` secrets were printed.
+- Blockers: none
+- Next step: TASK-002 final diff audit and closeout.
+
+### 2026-05-19 01:40 - RESET-SEED TASK-002
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `_task/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`, `_progress/progress.md`, `_handoff/current.md`, `_review/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`, `_release/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`, `_summary/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`
+- Dirty worktree protection: Final status still includes prior dirty ride-assignment source/test files and untracked prior workflow artifacts. Reset/seed workflow edits are limited to workflow artifacts.
+- Acceptance result: `[x]` final diff audit documented; `[x]` review, release notes, summary, progress, and handoff updated; `[x]` workflow health recorded.
+- Verification result: `git diff --stat`, `git diff`, and `git status --short` completed. `git diff` shows tracked workflow changes plus pre-existing ride-assignment source/test changes; new reset/seed artifacts appear in `git status --short` as untracked.
+- Failure recovery notes: none for closeout. TASK-001 records the database reset permission recovery.
+- Review result: Reviewed; no application code changes were made for this reset/seed workflow.
+- Blockers: none
+- Next step: Final response.
+
+### 2026-05-19 01:16 - RIDE-ASSIGNMENT-AUDIT TASK-001
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `WORK_REQUEST.md`, `_spec/2026-05-19-audit-ride-booking-assignment-flow.md`, `_task/2026-05-19-audit-ride-booking-assignment-flow.md`, `server/services/assignmentService.js`, `server/controllers/driverController.js`, `server/tests/dispatchLifecycle.test.js`
+- Dirty worktree protection: Initial status after syncing request showed only `M WORK_REQUEST.md`. Planned implementation paths had no pre-existing dirty user changes.
+- Acceptance result: `[x]` queued booking assigns when approved driver switches from `OFFLINE` to `ACTIVE`; `[x]` admin approval into active service assigns queued booking; `[x]` rejection with no replacement driver returns booking to `QUEUED` and clears `assignedDriver`; `[x]` immediate assignment on booking creation remains covered; `[x]` targeted backend lifecycle tests pass.
+- Verification result: `npm test -- --runTestsByPath server/tests/dispatchLifecycle.test.js` passed 1 suite/13 tests. `npm test` passed 4 suites/25 tests.
+- Failure recovery notes: none
+- Review result: Reviewed; the audit found that booking creation and driver rejection queue paths existed, but queued bookings were not retried when a driver later became available. The fix adds a specific-driver queue assignment helper and triggers it only when driver availability changes into approved active service.
+- Blockers: none
+- Next step: TASK-002 final diff audit and closeout.
+
+### 2026-05-19 01:17 - RIDE-ASSIGNMENT-AUDIT TASK-002
+
+- Status: Done
+- Lifecycle transition reached: Planned -> Ready -> In Progress -> Verified -> Reviewed -> Done
+- Files changed: `_task/2026-05-19-audit-ride-booking-assignment-flow.md`, `_progress/progress.md`, `_handoff/current.md`, `_review/2026-05-19-audit-ride-booking-assignment-flow.md`, `_release/2026-05-19-audit-ride-booking-assignment-flow.md`, `_summary/2026-05-19-audit-ride-booking-assignment-flow.md`
+- Dirty worktree protection: Final status contains intentional implementation, test, and workflow artifact changes only.
+- Acceptance result: `[x]` final diff audit documented; `[x]` review, release notes, summary, progress, and handoff updated; `[x]` workflow health recorded.
+- Verification result: `git diff --stat`, targeted `git diff`, and `git status --short` completed.
+- Failure recovery notes: none
+- Review result: Reviewed; final diff is scoped to the queue assignment fix and workflow artifacts.
+- Blockers: none
+- Next step: Final response.
+
 ### 2026-05-14 12:30 - LIFECYCLE-FIX TASK-001
 
 - Status: Done

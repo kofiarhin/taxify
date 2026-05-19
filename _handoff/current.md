@@ -4,11 +4,11 @@ This file is the live resume state for the active workflow. Keep it current afte
 
 ## Current Request
 
-Implement the high-priority Taxify booking/trip/payment lifecycle fix using the required statuses and flow, update backend/frontend/admin behavior, add lifecycle tests, and verify backend tests plus client build.
+Reset the Taxify MongoDB database configured by the root `.env`, then seed existing role users with password `password`.
 
 ## Request ID
 
-`2026-05-14-high-priority-lifecycle-fix`
+`2026-05-19-reset-taxify-database-seed-admin-client-driver`
 
 ## Current Phase
 
@@ -20,27 +20,27 @@ Implement the high-priority Taxify booking/trip/payment lifecycle fix using the 
 
 ## Current Spec File
 
-`_spec/2026-05-14-high-priority-lifecycle-fix.md`
+`_spec/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`
 
 ## Current Task Plan File
 
-`_task/2026-05-14-high-priority-lifecycle-fix.md`
+`_task/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`
 
 ## Current Review File
 
-`_review/2026-05-14-high-priority-lifecycle-fix.md`
+`_review/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`
 
 ## Current Release Notes File
 
-`_release/2026-05-14-high-priority-lifecycle-fix.md`
+`_release/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`
 
 ## Current Summary File
 
-`_summary/2026-05-14-high-priority-lifecycle-fix.md`
+`_summary/2026-05-19-reset-taxify-database-seed-admin-client-driver.md`
 
 ## Last Completed Task
 
-`TASK-003: Update lifecycle tests and close workflow`
+`TASK-002: Close workflow artifacts`
 
 ## Current Task
 
@@ -52,11 +52,11 @@ Implement the high-priority Taxify booking/trip/payment lifecycle fix using the 
 
 ## Dirty Worktree Status
 
-`Final dirty files are intentional lifecycle source/test/E2E updates and workflow artifacts.`
+`Final status includes this workflow's reset/seed artifacts plus prior dirty ride-assignment source/test files and prior untracked ride-assignment artifacts. Reset/seed workflow did not edit implementation code.`
 
 ## Acceptance Status
 
-`complete: TASK-001 through TASK-003 acceptance criteria checked`
+`complete: TASK-001 through TASK-002 acceptance criteria checked`
 
 ## Blockers
 
@@ -64,7 +64,7 @@ Implement the high-priority Taxify booking/trip/payment lifecycle fix using the 
 
 ## Verification Status
 
-`passed: targeted backend lifecycle/admin tests; npm run test --prefix client; npm run build --prefix client; npm test; old-status rg check; git diff --stat; targeted git diff; git status --short`
+`passed with targeted recovery: dropDatabase permission denied, collection-level delete reset succeeded, seed succeeded, seeded user password checks succeeded, final diff audit completed`
 
 ## Workflow Health Status
 
@@ -72,11 +72,12 @@ Implement the high-priority Taxify booking/trip/payment lifecycle fix using the 
 
 ## Suggested Next Prompt
 
-`Review and commit the lifecycle status fix`
+`Log in with the seeded local users or commit the reset/seed workflow artifacts`
 
 ## Notes For Continuation
 
-- Required explicit transition is `TRIP_IN_PROGRESS -> TRIP_ENDED -> AWAITING_DRIVER_PAYMENT_CONFIRMATION -> PAID -> COMPLETED`.
-- Old `TRIP_AWAITING_ARRIVAL_ACK` and `AWAITING_PAYMENT` status strings have been removed from backend and frontend source/test/E2E files.
-- Keep existing trip routes stable where practical; aliases are acceptable only when needed.
-- Apply `design-taste-frontend` pre-flight before final frontend output.
+- User explicitly approved deleting all data in the root `.env` Taxify database.
+- The configured MongoDB user could not run `dropDatabase`; reset was completed by deleting all documents from non-system collections in `taxify_dev`.
+- Existing seed script is `server/scripts/seedUsers.js` and was run with `SEED_PASSWORD=password`.
+- Existing seed script seeds admin, agent, driver, and client; admin/client/driver were verified and total seeded users is 4.
+- No frontend work was performed, so `design-taste-frontend` was not applicable.
