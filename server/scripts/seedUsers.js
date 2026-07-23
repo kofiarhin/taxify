@@ -6,9 +6,6 @@ const DriverProfile = require('../models/DriverProfile');
 const { ROLES } = require('../constants/roles');
 const { DRIVER_APPROVAL_STATUS, DRIVER_STATUS } = require('../constants/statuses');
 
-const seedPassword = process.env.SEED_PASSWORD || 'Password123!';
-const resetPasswords = process.env.RESET_SEEDED_PASSWORDS !== 'false';
-
 const users = [
   {
     key: 'admin',
@@ -40,19 +37,38 @@ const users = [
   }
 ];
 
-const seed = async () => {
-  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
+const getSeedConfig = (env = process.env) => {
+  if (env.NODE_ENV === 'production' && env.ALLOW_PRODUCTION_SEED !== 'true') {
     throw new Error('Refusing to seed production without ALLOW_PRODUCTION_SEED=true');
   }
 
-  await connectDb();
+  if (typeof env.SEED_PASSWORD !== 'string' || env.SEED_PASSWORD.trim() === '') {
+    throw new Error('SEED_PASSWORD is required');
+  }
+
+  return {
+    seedPassword: env.SEED_PASSWORD,
+    resetPasswords: env.RESET_SEEDED_PASSWORDS === 'true'
+  };
+};
+
+const seed = async ({
+  env = process.env,
+  connect = connectDb,
+  UserModel = User,
+  DriverProfileModel = DriverProfile,
+  logger = console
+} = {}) => {
+  const { seedPassword, resetPasswords } = getSeedConfig(env);
+
+  await connect();
 
   const seeded = [];
 
   for (const entry of users) {
-    let user = await User.findOne({ email: entry.email });
+    let user = await UserModel.findOne({ email: entry.email });
     if (!user) {
-      user = await User.create({
+      user = await UserModel.create({
         name: entry.name,
         email: entry.email,
         phone: entry.phone,
@@ -70,7 +86,7 @@ const seed = async () => {
     }
 
     if (entry.role === ROLES.DRIVER) {
-      await DriverProfile.findOneAndUpdate(
+      await DriverProfileModel.findOneAndUpdate(
         { user: user._id },
         {
           user: user._id,
@@ -88,19 +104,24 @@ const seed = async () => {
     seeded.push({ role: entry.role, email: entry.email });
   }
 
-  console.log('Seeded Taxify role users:');
-  seeded.forEach((entry) => console.log(`- ${entry.role}: ${entry.email}`));
-  console.log(`Default password: ${seedPassword}`);
-  console.log('Seeded driver profile: APPROVED / ACTIVE');
+  logger.log('Seeded Taxify role users:');
+  seeded.forEach((entry) => logger.log(`- ${entry.role}: ${entry.email}`));
+  logger.log('Seeded driver profile: APPROVED / ACTIVE');
+
+  return seeded;
 };
 
-seed()
-  .then(async () => {
-    await mongoose.disconnect();
-    process.exit(0);
-  })
-  .catch(async (error) => {
-    console.error(error.message || error);
-    await mongoose.disconnect().catch(() => {});
-    process.exit(1);
-  });
+if (require.main === module) {
+  seed()
+    .then(async () => {
+      await mongoose.disconnect();
+      process.exit(0);
+    })
+    .catch(async (error) => {
+      console.error(error.message || error);
+      await mongoose.disconnect().catch(() => {});
+      process.exit(1);
+    });
+}
+
+module.exports = { getSeedConfig, seed, users };
